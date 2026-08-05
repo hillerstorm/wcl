@@ -1,6 +1,6 @@
 {
   "name": "@hillerstorm/wcl",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Warcraft Logs CLI — fetch report data, search public logs, and verify sim damage calculations against real combat logs. PKCE auth, disk caching, rate-limit awareness, WoWSims db.json enrichment.",
   "type": "module",
   "license": "MIT",

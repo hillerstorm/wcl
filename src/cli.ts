@@ -8,7 +8,7 @@ const program = new Command();
 program
   .name('wcl')
   .description('Warcraft Logs CLI — fetch, search, and verify against the WCL GraphQL API')
-  .version('0.1.0')
+  .version('1.0.0')
   .option('--instance <inst>', 'WCL instance: fresh (TBC) | classic (MoP) | vanilla (Era) | sod | retail')
   .option('--expansion <exp>', 'sim project for enrichment: tbc | mop | classic | sod')
   .option('--no-cache', 'bypass disk cache for this call')
