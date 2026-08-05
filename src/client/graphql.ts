@@ -46,11 +46,40 @@ async function ensureFreshCredentials(): Promise<Credentials> {
 }
 
 function injectRateLimit(query: string): string {
-  const trimmed = query.trimEnd();
-  if (trimmed.includes('rateLimitData')) return query;
-  const lastBrace = trimmed.lastIndexOf('}');
-  if (lastBrace < 0) return query;
-  return trimmed.slice(0, lastBrace) + ` ${RATE_LIMIT_FIELD}\n` + trimmed.slice(lastBrace);
+  if (query.includes('rateLimitData')) return query;
+  // Inject into the closing brace of the first top-level selection set, skipping
+  // comments and strings so braces inside them don't confuse the scan. Documents
+  // whose first definition isn't a plain query (mutation/subscription/fragment)
+  // are sent untouched — rateLimitData is a Query field.
+  let depth = 0;
+  let firstBrace = -1;
+  let i = 0;
+  while (i < query.length) {
+    const c = query[i];
+    if (c === '#') {
+      while (i < query.length && query[i] !== '\n') i++;
+      continue;
+    }
+    if (c === '"') {
+      i++;
+      while (i < query.length && query[i] !== '"') i += query[i] === '\\' ? 2 : 1;
+      i++;
+      continue;
+    }
+    if (c === '{') {
+      if (depth === 0 && firstBrace < 0) firstBrace = i;
+      depth++;
+    } else if (c === '}') {
+      depth--;
+      if (depth === 0 && firstBrace >= 0) {
+        const prefix = query.slice(0, firstBrace).replace(/#[^\n]*/g, '').trim();
+        if (prefix !== '' && !/^query\b/.test(prefix)) return query;
+        return query.slice(0, i) + ` ${RATE_LIMIT_FIELD}\n` + query.slice(i);
+      }
+    }
+    i++;
+  }
+  return query;
 }
 
 async function doFetch(url: string, token: string, query: string, variables: Record<string, unknown>) {

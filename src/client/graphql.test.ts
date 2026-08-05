@@ -71,6 +71,29 @@ describe('gqlRequest', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('injects rateLimitData into the operation, not a trailing fragment', async () => {
+    writeCredentials({ access_token: 'tok', refresh_token: 'r', expires_at: Date.now() + 3_600_000, token_type: 'Bearer' });
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ data: { x: 1 } }), { status: 200 }),
+    );
+    const query = 'query Q { reportData { report(code: "X") { ...F } } }\nfragment F on Report { title }';
+    await gqlRequest({ instance: 'fresh', query, variables: {}, force: true, useCache: false });
+    const sent = (JSON.parse(fetchMock.mock.calls[0]![1]!.body as string) as { query: string }).query;
+    expect(sent).toContain('rateLimitData');
+    expect(sent.indexOf('rateLimitData')).toBeLessThan(sent.indexOf('fragment '));
+  });
+
+  it('ignores braces inside trailing comments when injecting rateLimitData', async () => {
+    writeCredentials({ access_token: 'tok', refresh_token: 'r', expires_at: Date.now() + 3_600_000, token_type: 'Bearer' });
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ data: { x: 1 } }), { status: 200 }),
+    );
+    const query = 'query { x }\n# closing brace in a comment: }';
+    await gqlRequest({ instance: 'fresh', query, variables: {}, force: true, useCache: false });
+    const sent = (JSON.parse(fetchMock.mock.calls[0]![1]!.body as string) as { query: string }).query;
+    expect(sent.indexOf('rateLimitData')).toBeLessThan(sent.indexOf('#'));
+  });
+
   it('throws RATE_LIMITED on 429', async () => {
     writeCredentials({ access_token: 'tok', refresh_token: 'r', expires_at: Date.now() + 3_600_000, token_type: 'Bearer' });
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('', { status: 429 }));
