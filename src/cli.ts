@@ -26,6 +26,15 @@ function resolveInstance(g: { instance?: string; expansion?: string }): Instance
   return 'fresh';
 }
 
+function intArg(label: string): (value: string) => number {
+  return (value) => {
+    if (!/^-?\d+$/.test(value.trim())) {
+      throw new CliError('BAD_INPUT', `${label} must be an integer, got "${value}"`);
+    }
+    return parseInt(value, 10);
+  };
+}
+
 program.command('init')
   .description('Interactive first-time setup (client ID + sim paths) — writes config.json')
   .action(async () => {
@@ -107,18 +116,13 @@ program.command('report')
 program.command('fight')
   .description('Fetch fight metadata + damage-done table')
   .argument('<code>', 'WCL report code')
-  .argument('<fightId>', 'fight ID (integer)')
-  .action(async (code: string, fightId: string) => {
+  .argument('<fightId>', 'fight ID (integer)', intArg('fightId'))
+  .action(async (code: string, fightId: number) => {
     const g = program.optsWithGlobals() as any;
-    const id = parseInt(fightId, 10);
-    if (!Number.isInteger(id)) {
-      process.stderr.write(JSON.stringify({ code: 'BAD_INPUT', message: 'fightId must be an integer' }) + '\n');
-      process.exit(7);
-    }
     const { runFight } = await import('./commands/fight.js');
     try {
       await runFight({
-        code, fightId: id, instance: resolveInstance(g), force: !!g.force, pretty: !!g.pretty,
+        code, fightId, instance: resolveInstance(g), force: !!g.force, pretty: !!g.pretty,
         useCache: g.cache !== false,
         ...(g.expansion ? { expansion: g.expansion } : {}),
       });
@@ -181,34 +185,29 @@ program.command('actors')
 program.command('events')
   .description('Dump or summarize a fight\'s event stream (auto-paginates past the 10k-event limit)')
   .argument('<code>', 'WCL report code')
-  .argument('<fightId>', 'fight ID (integer)')
+  .argument('<fightId>', 'fight ID (integer)', intArg('fightId'))
   .option('--type <dataType>', 'damage | damage-taken | casts | buffs | debuffs | healing | deaths | resources | interrupts | dispels | summons | threat | all', 'damage')
   .option('--source <idOrName>', 'filter by source actor (numeric ID or name)')
   .option('--target <idOrName>', 'filter by target actor (numeric ID or name)')
-  .option('--ability <id>', 'filter by ability game ID')
-  .option('--start <ms>', 'override window start (absolute report ms; default: fight start)')
-  .option('--end <ms>', 'override window end (absolute report ms; default: fight end)')
-  .option('--limit <n>', 'events per page', '10000')
-  .option('--max-pages <n>', 'pagination cap', '20')
+  .option('--ability <id>', 'filter by ability game ID', intArg('--ability'))
+  .option('--start <ms>', 'override window start (absolute report ms; default: fight start)', intArg('--start'))
+  .option('--end <ms>', 'override window end (absolute report ms; default: fight end)', intArg('--end'))
+  .option('--limit <n>', 'events per page', intArg('--limit'), 10000)
+  .option('--max-pages <n>', 'pagination cap', intArg('--max-pages'), 20)
   .option('--jsonl', 'emit one event per line (no wrapper object)')
   .option('--summary', 'emit aggregate summary (counts by ability/type/source/target) instead of events')
-  .action(async (code: string, fightId: string, cmdOpts: any) => {
+  .action(async (code: string, fightId: number, cmdOpts: any) => {
     const g = program.optsWithGlobals() as any;
-    const id = parseInt(fightId, 10);
-    if (!Number.isInteger(id)) {
-      process.stderr.write(JSON.stringify({ code: 'BAD_INPUT', message: 'fightId must be an integer' }) + '\n');
-      process.exit(7);
-    }
     const { runEvents } = await import('./commands/events.js');
     try {
       await runEvents({
-        code, fightId: id, type: cmdOpts.type,
+        code, fightId, type: cmdOpts.type,
         ...(cmdOpts.source !== undefined ? { source: cmdOpts.source } : {}),
         ...(cmdOpts.target !== undefined ? { target: cmdOpts.target } : {}),
-        ...(cmdOpts.ability !== undefined ? { ability: parseInt(cmdOpts.ability, 10) } : {}),
-        ...(cmdOpts.start !== undefined ? { start: parseInt(cmdOpts.start, 10) } : {}),
-        ...(cmdOpts.end !== undefined ? { end: parseInt(cmdOpts.end, 10) } : {}),
-        limit: parseInt(cmdOpts.limit, 10), maxPages: parseInt(cmdOpts.maxPages, 10),
+        ...(cmdOpts.ability !== undefined ? { ability: cmdOpts.ability } : {}),
+        ...(cmdOpts.start !== undefined ? { start: cmdOpts.start } : {}),
+        ...(cmdOpts.end !== undefined ? { end: cmdOpts.end } : {}),
+        limit: cmdOpts.limit, maxPages: cmdOpts.maxPages,
         jsonl: !!cmdOpts.jsonl, summary: !!cmdOpts.summary,
         instance: resolveInstance(g), force: !!g.force, pretty: !!g.pretty,
         useCache: g.cache !== false,
@@ -222,19 +221,14 @@ program.command('events')
 program.command('player')
   .description('Fetch player snapshot, casts, damage, buffs for a fight')
   .argument('<code>', 'WCL report code')
-  .argument('<fightId>', 'fight ID (integer)')
+  .argument('<fightId>', 'fight ID (integer)', intArg('fightId'))
   .argument('<name>', 'player name')
-  .action(async (code: string, fightId: string, name: string) => {
+  .action(async (code: string, fightId: number, name: string) => {
     const g = program.optsWithGlobals() as any;
-    const id = parseInt(fightId, 10);
-    if (!Number.isInteger(id)) {
-      process.stderr.write(JSON.stringify({ code: 'BAD_INPUT', message: 'fightId must be an integer' }) + '\n');
-      process.exit(7);
-    }
     const { runPlayer } = await import('./commands/player.js');
     try {
       await runPlayer({
-        code, fightId: id, name, instance: resolveInstance(g), force: !!g.force, pretty: !!g.pretty,
+        code, fightId, name, instance: resolveInstance(g), force: !!g.force, pretty: !!g.pretty,
         useCache: g.cache !== false,
         ...(g.expansion ? { expansion: g.expansion } : {}),
       });
@@ -247,27 +241,22 @@ program.command('player')
 program.command('cast-snapshot')
   .description('Full snapshot for a single cast: caster gear/talents/buffs + target debuffs at T')
   .argument('<code>', 'WCL report code')
-  .argument('<fightId>', 'fight ID (integer)')
+  .argument('<fightId>', 'fight ID (integer)', intArg('fightId'))
   .argument('<name>', 'player name')
-  .option('--at <ms>', 'absolute fight-time in ms')
-  .option('--ability <id>', 'ability ID (use with --index)')
-  .option('--index <n>', 'Nth cast of ability (1-indexed)')
-  .option('--window <ms>', 'surrounding-casts window (default 5000)', '5000')
-  .action(async (code: string, fightId: string, name: string, cmdOpts: { at?: string; ability?: string; index?: string; window: string }) => {
+  .option('--at <ms>', 'absolute fight-time in ms', intArg('--at'))
+  .option('--ability <id>', 'ability ID (use with --index)', intArg('--ability'))
+  .option('--index <n>', 'Nth cast of ability (1-indexed)', intArg('--index'))
+  .option('--window <ms>', 'surrounding-casts window (default 5000)', intArg('--window'), 5000)
+  .action(async (code: string, fightId: number, name: string, cmdOpts: { at?: number; ability?: number; index?: number; window: number }) => {
     const g = program.optsWithGlobals() as any;
-    const id = parseInt(fightId, 10);
-    if (!Number.isInteger(id)) {
-      process.stderr.write(JSON.stringify({ code: 'BAD_INPUT', message: 'fightId must be an integer' }) + '\n');
-      process.exit(7);
-    }
     const { runCastSnapshot } = await import('./commands/cast-snapshot.js');
     try {
       await runCastSnapshot({
-        code, fightId: id, name,
-        ...(cmdOpts.at !== undefined ? { at: parseInt(cmdOpts.at, 10) } : {}),
-        ...(cmdOpts.ability !== undefined ? { ability: parseInt(cmdOpts.ability, 10) } : {}),
-        ...(cmdOpts.index !== undefined ? { index: parseInt(cmdOpts.index, 10) } : {}),
-        window: parseInt(cmdOpts.window, 10),
+        code, fightId, name,
+        ...(cmdOpts.at !== undefined ? { at: cmdOpts.at } : {}),
+        ...(cmdOpts.ability !== undefined ? { ability: cmdOpts.ability } : {}),
+        ...(cmdOpts.index !== undefined ? { index: cmdOpts.index } : {}),
+        window: cmdOpts.window,
         instance: resolveInstance(g), force: !!g.force, pretty: !!g.pretty,
         useCache: g.cache !== false,
         ...(g.expansion ? { expansion: g.expansion } : {}),
@@ -288,16 +277,13 @@ program.command('search')
   .option('--server <slug>', 'server slug')
   .option('--guild <name>', 'guild name')
   .option('--order <field>', 'amount | date', 'amount')
-  .option('--limit <n>', 'max results to print', '20')
-  .option('--page <n>', 'WCL ranking page (1-indexed)', '1')
+  .option('--limit <n>', 'max results to print', intArg('--limit'), 20)
+  .option('--page <n>', 'WCL ranking page (1-indexed)', intArg('--page'), 1)
   .action(async (cmdOpts: any) => {
     const g = program.optsWithGlobals() as any;
-    if (!cmdOpts.encounter) {
-      process.stderr.write(JSON.stringify({ code: 'BAD_INPUT', message: '--encounter is required' }) + '\n');
-      process.exit(7);
-    }
     const { runSearch } = await import('./commands/search.js');
     try {
+      if (!cmdOpts.encounter) throw new CliError('BAD_INPUT', '--encounter is required');
       await runSearch({
         encounter: cmdOpts.encounter,
         ...(cmdOpts.class ? { className: cmdOpts.class } : {}),
@@ -306,7 +292,7 @@ program.command('search')
         ...(cmdOpts.region ? { region: cmdOpts.region } : {}),
         ...(cmdOpts.server ? { server: cmdOpts.server } : {}),
         ...(cmdOpts.guild ? { guild: cmdOpts.guild } : {}),
-        order: cmdOpts.order, limit: parseInt(cmdOpts.limit, 10), page: parseInt(cmdOpts.page, 10),
+        order: cmdOpts.order, limit: cmdOpts.limit, page: cmdOpts.page,
         instance: resolveInstance(g), force: !!g.force, pretty: !!g.pretty, useCache: g.cache !== false,
       });
     } catch (e) {
@@ -320,12 +306,12 @@ program.command('character')
   .argument('<name>', 'character name')
   .argument('<server>', 'server slug (lowercase, no spaces)')
   .argument('<region>', 'region: us | eu | kr | tw | cn')
-  .option('--zone <id>', 'zone ID (default: character\'s latest zone)')
+  .option('--zone <id>', 'zone ID (default: character\'s latest zone)', intArg('--zone'))
   .option('--metric <m>', 'dps | hps | bossdps | tankhps | playerscore | …')
   .option('--spec <name>', 'restrict rankings to a spec')
-  .option('--difficulty <n>', 'difficulty ID')
-  .option('--size <n>', 'raid size')
-  .option('--partition <n>', 'ranking partition')
+  .option('--difficulty <n>', 'difficulty ID', intArg('--difficulty'))
+  .option('--size <n>', 'raid size', intArg('--size'))
+  .option('--partition <n>', 'ranking partition', intArg('--partition'))
   .option('--json', 'emit JSON instead of a text table')
   .action(async (name: string, server: string, region: string, cmdOpts: any) => {
     const g = program.optsWithGlobals() as any;
@@ -333,12 +319,12 @@ program.command('character')
     try {
       await runCharacter({
         name, server, region, json: !!cmdOpts.json,
-        ...(cmdOpts.zone !== undefined ? { zone: parseInt(cmdOpts.zone, 10) } : {}),
+        ...(cmdOpts.zone !== undefined ? { zone: cmdOpts.zone } : {}),
         ...(cmdOpts.metric !== undefined ? { metric: cmdOpts.metric } : {}),
         ...(cmdOpts.spec !== undefined ? { spec: cmdOpts.spec } : {}),
-        ...(cmdOpts.difficulty !== undefined ? { difficulty: parseInt(cmdOpts.difficulty, 10) } : {}),
-        ...(cmdOpts.size !== undefined ? { size: parseInt(cmdOpts.size, 10) } : {}),
-        ...(cmdOpts.partition !== undefined ? { partition: parseInt(cmdOpts.partition, 10) } : {}),
+        ...(cmdOpts.difficulty !== undefined ? { difficulty: cmdOpts.difficulty } : {}),
+        ...(cmdOpts.size !== undefined ? { size: cmdOpts.size } : {}),
+        ...(cmdOpts.partition !== undefined ? { partition: cmdOpts.partition } : {}),
         instance: resolveInstance(g), force: !!g.force, pretty: !!g.pretty,
         useCache: g.cache !== false,
       });
@@ -351,19 +337,14 @@ program.command('character')
 program.command('gear')
   .description('Fetch a player\'s gear/enchants/gems for a boss fight')
   .argument('<code>', 'WCL report code')
-  .argument('<fightId>', 'fight ID (integer, must be a boss fight)')
+  .argument('<fightId>', 'fight ID (integer, must be a boss fight)', intArg('fightId'))
   .argument('<name>', 'player name')
-  .action(async (code: string, fightId: string, name: string) => {
+  .action(async (code: string, fightId: number, name: string) => {
     const g = program.optsWithGlobals() as any;
-    const id = parseInt(fightId, 10);
-    if (!Number.isInteger(id)) {
-      process.stderr.write(JSON.stringify({ code: 'BAD_INPUT', message: 'fightId must be an integer' }) + '\n');
-      process.exit(7);
-    }
     const { runGear } = await import('./commands/gear.js');
     try {
       await runGear({
-        code, fightId: id, name,
+        code, fightId, name,
         instance: resolveInstance(g), force: !!g.force, pretty: !!g.pretty,
         useCache: g.cache !== false,
         ...(g.expansion ? { expansion: g.expansion } : {}),

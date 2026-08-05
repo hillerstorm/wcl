@@ -45,6 +45,20 @@ describe('cli', () => {
     expect(r.status).not.toBe(0);
   });
 
+  it('rejects a non-integer numeric option as BAD_INPUT (exit 7)', () => {
+    const r = runCli(['events', 'ABC123', '1', '--max-pages', 'abc']);
+    expect(r.status).toBe(7);
+    const err = JSON.parse(r.stderr);
+    expect(err.code).toBe('BAD_INPUT');
+    expect(err.message).toMatch(/max-pages/);
+  });
+
+  it('rejects a non-integer fightId as BAD_INPUT (exit 7)', () => {
+    const r = runCli(['fight', 'ABC123', 'xyz']);
+    expect(r.status).toBe(7);
+    expect(JSON.parse(r.stderr).code).toBe('BAD_INPUT');
+  });
+
   it('rejects an unknown --instance as BAD_INPUT (exit 7)', () => {
     const r = runCli(['--instance', 'bogus', 'report', 'ABC123']);
     expect(r.status).toBe(7);
