@@ -122,6 +122,22 @@ describe('gqlRequest', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('classifies a network failure during the 5xx retry as NETWORK_ERROR', async () => {
+    writeCredentials({ access_token: 'tok', refresh_token: 'r', expires_at: Date.now() + 3_600_000, token_type: 'Bearer' });
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response('', { status: 502 }))
+      .mockRejectedValueOnce(new TypeError('fetch failed'));
+    await expect(gqlRequest({ instance: 'fresh', query: 'q', variables: {}, force: true, useCache: false }))
+      .rejects.toMatchObject({ code: 'NETWORK_ERROR' });
+  });
+
+  it('classifies a non-JSON response body as NETWORK_ERROR', async () => {
+    writeCredentials({ access_token: 'tok', refresh_token: 'r', expires_at: Date.now() + 3_600_000, token_type: 'Bearer' });
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('<html>gateway</html>', { status: 200 }));
+    await expect(gqlRequest({ instance: 'fresh', query: 'q', variables: {}, force: true, useCache: false }))
+      .rejects.toMatchObject({ code: 'NETWORK_ERROR' });
+  });
+
   it('throws RATE_LIMITED on 429', async () => {
     writeCredentials({ access_token: 'tok', refresh_token: 'r', expires_at: Date.now() + 3_600_000, token_type: 'Bearer' });
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('', { status: 429 }));

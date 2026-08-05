@@ -124,7 +124,11 @@ export async function gqlRequest(args: RequestArgs): Promise<RequestResult> {
   }
   if (res.status >= 500) {
     await new Promise(r => setTimeout(r, 500));
-    res = await doFetch(url, creds.access_token, queryWithLimit, variables);
+    try {
+      res = await doFetch(url, creds.access_token, queryWithLimit, variables);
+    } catch (e) {
+      throw new CliError('NETWORK_ERROR', `Network failure: ${String(e)}`, 'transient — retry');
+    }
     if (res.status >= 500) {
       throw new CliError('NETWORK_ERROR', `Server returned ${res.status}.`, 'transient — retry');
     }
@@ -134,7 +138,12 @@ export async function gqlRequest(args: RequestArgs): Promise<RequestResult> {
     throw new CliError('GRAPHQL_ERROR', `HTTP ${res.status}: ${text.slice(0, 200)}`);
   }
 
-  const payload = (await res.json()) as { data?: unknown; errors?: { message: string }[]; rateLimitData?: unknown };
+  let payload: { data?: unknown; errors?: { message: string }[]; rateLimitData?: unknown };
+  try {
+    payload = (await res.json()) as typeof payload;
+  } catch (e) {
+    throw new CliError('NETWORK_ERROR', `Server returned unparseable JSON: ${String(e)}`, 'transient — retry');
+  }
   const rateLimit = parseRateLimitData(payload as any) ?? parseRateLimitData((payload as any).data);
 
   if ((!payload.data || payload.data === null) && payload.errors && payload.errors.length > 0) {
