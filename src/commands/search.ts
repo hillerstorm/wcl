@@ -1,5 +1,5 @@
 import { gqlRequest, type Instance } from '../client/graphql.js';
-import { ENCOUNTER_LOOKUP, SEARCH_QUERY } from '../queries/search.graphql.js';
+import { ENCOUNTER_LOOKUP, SEARCH_QUERY, type EncounterLookupData, type SearchQueryData } from '../queries/search.graphql.js';
 import { writeStdout, CliError } from '../output.js';
 
 const DIFFICULTY_MAP: Record<string, number> = { n: 3, h: 4, m: 5, normal: 3, heroic: 4, mythic: 5 };
@@ -22,11 +22,11 @@ export interface SearchOptions {
 }
 
 async function resolveEncounterId(name: string, instance: Instance, useCache: boolean, force: boolean): Promise<number> {
-  const r = await gqlRequest({
+  const r = await gqlRequest<EncounterLookupData>({
     instance, query: ENCOUNTER_LOOKUP, variables: {},
     useCache, cacheTtlSeconds: 24 * 3600, force,
   });
-  const expansions = (r.data as any)?.worldData?.expansions ?? [];
+  const expansions = r.data?.worldData?.expansions ?? [];
   for (const exp of expansions) for (const zone of exp.zones ?? []) for (const enc of zone.encounters ?? []) {
     if (enc.name?.toLowerCase() === name.toLowerCase()) return enc.id;
   }
@@ -46,7 +46,7 @@ export async function runSearch(opts: SearchOptions): Promise<void> {
     throw new CliError('BAD_INPUT', `--difficulty must be n|h|m|normal|heroic|mythic`);
   }
 
-  const r = await gqlRequest({
+  const r = await gqlRequest<SearchQueryData>({
     instance: opts.instance, query: SEARCH_QUERY,
     variables: {
       encounterId,
@@ -59,7 +59,7 @@ export async function runSearch(opts: SearchOptions): Promise<void> {
     },
     useCache: opts.useCache, cacheTtlSeconds: 3600, force: opts.force,
   });
-  const enc = (r.data as any)?.worldData?.encounter;
+  const enc = r.data?.worldData?.encounter;
   if (!enc) throw new CliError('NOT_FOUND', `encounter ${encounterId} returned no data`);
 
   let all = enc.characterRankings?.rankings ?? [];

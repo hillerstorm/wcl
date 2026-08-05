@@ -1,5 +1,5 @@
 import { gqlRequest, type Instance } from '../client/graphql.js';
-import { CHARACTER_QUERY } from '../queries/character.graphql.js';
+import { CHARACTER_QUERY, type CharacterQueryData } from '../queries/character.graphql.js';
 import { writeStdout, CliError } from '../output.js';
 
 export interface CharacterOptions {
@@ -32,7 +32,7 @@ function pad(v: unknown, w: number): string {
 }
 
 export async function runCharacter(opts: CharacterOptions): Promise<void> {
-  const r = await gqlRequest({
+  const r = await gqlRequest<CharacterQueryData>({
     instance: opts.instance, query: CHARACTER_QUERY,
     variables: {
       name: opts.name, server: opts.server.toLowerCase(), region: opts.region.toLowerCase(),
@@ -45,7 +45,7 @@ export async function runCharacter(opts: CharacterOptions): Promise<void> {
     },
     useCache: opts.useCache, cacheTtlSeconds: ONE_HOUR, force: opts.force,
   });
-  const character = (r.data as any)?.characterData?.character;
+  const character = r.data?.characterData?.character;
   if (!character) {
     throw new CliError('NOT_FOUND', `character ${opts.name} on ${opts.server}/${opts.region} not found`,
       'check spelling; server is the slug (lowercase, no spaces), region is e.g. us / eu');

@@ -20,12 +20,18 @@
     "wowsims",
     "cli"
   ],
-  "bin": { "wcl": "./dist/cli.js" },
+  "bin": {
+    "wcl": "./dist/cli.js"
+  },
   "files": [
     "dist"
   ],
-  "publishConfig": { "access": "public" },
-  "engines": { "node": ">=22" },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "node scripts/build.mjs",
     "dev": "tsx src/cli.ts",
@@ -39,7 +45,6 @@
     "@types/node": "^26.1.2",
     "commander": "^15.0.0",
     "esbuild": "^0.28.1",
-    "graphql-request": "^7.4.0",
     "open": "^11.0.0",
     "tsx": "^4.23.6",
     "typescript": "^7.0.2",

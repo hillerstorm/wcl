@@ -1,5 +1,5 @@
 import { gqlRequest, type Instance } from '../client/graphql.js';
-import { REPORT_QUERY } from '../queries/report.graphql.js';
+import { REPORT_QUERY, type ReportFight, type ReportQueryData } from '../queries/report.graphql.js';
 import { writeStdout, CliError } from '../output.js';
 
 export interface FightsOptions {
@@ -21,15 +21,15 @@ function pad(v: unknown, w: number): string {
 }
 
 export async function runFights(opts: FightsOptions): Promise<void> {
-  const r = await gqlRequest({
+  const r = await gqlRequest<ReportQueryData>({
     instance: opts.instance, query: REPORT_QUERY,
     variables: { code: opts.code },
     useCache: opts.useCache, cacheTtlSeconds: SEVEN_DAYS, force: opts.force,
   });
-  const report = (r.data as any)?.reportData?.report;
+  const report = r.data?.reportData?.report;
   if (!report) throw new CliError('NOT_FOUND', `report ${opts.code} not found`, 'check the code + --instance');
 
-  let fights: any[] = report.fights ?? [];
+  let fights: ReportFight[] = report.fights ?? [];
   if (opts.boss) fights = fights.filter(f => f.encounterID);
   if (opts.kills) fights = fights.filter(f => f.kill === true);
   if (opts.encounter) {

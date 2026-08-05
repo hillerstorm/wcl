@@ -1,3 +1,15 @@
+export interface CharacterQueryData {
+  characterData?: {
+    character?: {
+      id: number;
+      name: string;
+      classID: number;
+      // zoneRankings is a JSON scalar in the WCL schema — no fixed shape.
+      zoneRankings?: any;
+    } | null;
+  } | null;
+}
+
 export const CHARACTER_QUERY = /* GraphQL */ `
   query Character($name: String!, $server: String!, $region: String!, $zoneID: Int, $metric: CharacterPageRankingMetricType, $difficulty: Int, $size: Int, $specName: String, $partition: Int) {
     characterData {

@@ -1,3 +1,23 @@
+export interface EncounterLookupData {
+  worldData?: {
+    expansions?: {
+      id: number;
+      name?: string | null;
+      zones?: { id: number; name?: string | null; encounters?: { id: number; name?: string | null }[] | null }[] | null;
+    }[] | null;
+  } | null;
+}
+
+export interface SearchQueryData {
+  worldData?: {
+    encounter?: {
+      name?: string | null;
+      // characterRankings is a JSON scalar in the WCL schema — no fixed shape.
+      characterRankings?: { rankings?: any[]; page?: number; hasMorePages?: boolean } | null;
+    } | null;
+  } | null;
+}
+
 export const ENCOUNTER_LOOKUP = /* GraphQL */ `
   query EncounterLookup {
     worldData { expansions { id name zones { id name encounters { id name } } } }

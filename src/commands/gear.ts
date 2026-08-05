@@ -29,18 +29,28 @@ const QUERY = /* GraphQL */ `query Gear($code: String!, $fightId: Int!) {
   } }
 }`;
 
+interface GearQueryData {
+  reportData?: {
+    report?: {
+      fights?: { id: number; startTime: number; endTime: number; kill?: boolean | null; encounterID?: number | null }[];
+      // playerDetails is a JSON scalar — role arrays hold loosely-shaped players.
+      playerDetails?: { data?: { playerDetails?: Record<string, any[]> } } | null;
+    } | null;
+  } | null;
+}
+
 export async function runGear(opts: GearOptions): Promise<void> {
-  const res = await gqlRequest({
+  const res = await gqlRequest<GearQueryData>({
     instance: opts.instance, query: QUERY,
     variables: { code: opts.code, fightId: opts.fightId },
     useCache: opts.useCache, cacheTtlSeconds: 7 * 24 * 3600, force: opts.force,
   });
-  const report = (res.data as any)?.reportData?.report;
+  const report = res.data?.reportData?.report;
   const fight = report?.fights?.[0];
   if (!fight) throw new CliError('NOT_FOUND', `fight ${opts.fightId} not in report ${opts.code}`);
 
   const roles = report?.playerDetails?.data?.playerDetails ?? {};
-  const players = (Object.values(roles) as any[][]).flat();
+  const players = Object.values(roles).flat();
   const player = players.find(p => p?.name === opts.name);
   if (!player) throw new CliError('NOT_FOUND', `player "${opts.name}" not in fight ${opts.fightId}`, 'check spelling / case');
 

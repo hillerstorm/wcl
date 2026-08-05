@@ -30,8 +30,8 @@ export interface RequestArgs {
   force: boolean;
 }
 
-export interface RequestResult {
-  data: unknown;
+export interface RequestResult<T = unknown> {
+  data: T;
   rateLimit: RateLimit | null;
   errors?: { message: string }[];
 }
@@ -100,13 +100,13 @@ async function doFetch(url: string, token: string, query: string, variables: Rec
   });
 }
 
-export async function gqlRequest(args: RequestArgs): Promise<RequestResult> {
+export async function gqlRequest<T = unknown>(args: RequestArgs): Promise<RequestResult<T>> {
   const { instance, query, variables, useCache, cacheTtlSeconds, force } = args;
   const url = INSTANCE_HOSTS[instance] + '/api/v2/user';
   const key = cacheKey(instance, query, variables);
 
   if (useCache) {
-    const cached = cacheGet<RequestResult>(key);
+    const cached = cacheGet<RequestResult<T>>(key);
     if (cached) return cached;
   }
 
@@ -151,7 +151,7 @@ export async function gqlRequest(args: RequestArgs): Promise<RequestResult> {
   } catch (e) {
     throw new CliError('NETWORK_ERROR', `Server returned unparseable JSON: ${String(e)}`, 'transient — retry');
   }
-  const rateLimit = parseRateLimitData(payload as any) ?? parseRateLimitData((payload as any).data);
+  const rateLimit = parseRateLimitData(payload) ?? parseRateLimitData(payload.data);
 
   if ((!payload.data || payload.data === null) && payload.errors && payload.errors.length > 0) {
     throw new CliError('GRAPHQL_ERROR', payload.errors.map(e => e.message).join('; '), undefined, payload.errors);
@@ -160,12 +160,12 @@ export async function gqlRequest(args: RequestArgs): Promise<RequestResult> {
     process.stderr.write(JSON.stringify({ warning: 'partial-graphql-errors', errors: payload.errors }) + '\n');
   }
 
-  let visible: any = payload.data;
+  let visible = payload.data;
   if (visible && typeof visible === 'object' && 'rateLimitData' in visible) {
-    const { rateLimitData: _, ...rest } = visible;
+    const { rateLimitData: _, ...rest } = visible as Record<string, unknown>;
     visible = rest;
   }
-  const result: RequestResult = { data: visible, rateLimit, ...(payload.errors ? { errors: payload.errors } : {}) };
+  const result: RequestResult<T> = { data: visible as T, rateLimit, ...(payload.errors ? { errors: payload.errors } : {}) };
 
   // A response with partial errors may be transiently degraded — never freeze it in the cache.
   const clean = !payload.errors || payload.errors.length === 0;

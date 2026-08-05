@@ -1,5 +1,5 @@
 import { gqlRequest, type Instance } from './graphql.js';
-import { EVENTS_QUERY } from '../queries/events.graphql.js';
+import { EVENTS_QUERY, type EventsPageData } from '../queries/events.graphql.js';
 import { CliError } from '../output.js';
 import type { RateLimit } from './rate-limit.js';
 
@@ -42,7 +42,7 @@ export async function fetchEventStream(args: EventStreamArgs): Promise<EventStre
   let rateLimit: RateLimit | null = null;
 
   while (pages < maxPages) {
-    const r = await gqlRequest({
+    const r = await gqlRequest<EventsPageData>({
       instance: args.instance, query: EVENTS_QUERY,
       variables: {
         code: args.code, fightId: args.fightId, dataType: args.dataType,
@@ -54,7 +54,7 @@ export async function fetchEventStream(args: EventStreamArgs): Promise<EventStre
       useCache: args.useCache, cacheTtlSeconds: args.cacheTtlSeconds, force: args.force,
     });
     rateLimit = r.rateLimit ?? rateLimit;
-    const page = (r.data as any)?.reportData?.report?.events;
+    const page = r.data?.reportData?.report?.events;
     if (!page) throw new CliError('NOT_FOUND', `no events returned for fight ${args.fightId}`);
     events.push(...(page.data ?? []));
     pages += 1;

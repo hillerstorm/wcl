@@ -1,5 +1,5 @@
 import { gqlRequest, type Instance } from '../client/graphql.js';
-import { REPORT_QUERY } from '../queries/report.graphql.js';
+import { REPORT_QUERY, type ReportActor, type ReportQueryData } from '../queries/report.graphql.js';
 import { writeStdout, CliError } from '../output.js';
 
 export interface ActorsOptions {
@@ -35,16 +35,16 @@ export async function runActors(opts: ActorsOptions): Promise<void> {
   }
   const typeFilter = TYPE_FILTERS[typeKey];
 
-  const r = await gqlRequest({
+  const r = await gqlRequest<ReportQueryData>({
     instance: opts.instance, query: REPORT_QUERY,
     variables: { code: opts.code },
     useCache: opts.useCache, cacheTtlSeconds: SEVEN_DAYS, force: opts.force,
   });
-  const report = (r.data as any)?.reportData?.report;
+  const report = r.data?.reportData?.report;
   if (!report) throw new CliError('NOT_FOUND', `report ${opts.code} not found`, 'check the code + --instance');
 
-  const all: any[] = report.masterData?.actors ?? [];
-  const byId = new Map<number, any>(all.map(a => [a.id, a]));
+  const all: ReportActor[] = report.masterData?.actors ?? [];
+  const byId = new Map<number, ReportActor>(all.map(a => [a.id, a]));
 
   let ownerId: number | undefined;
   if (opts.owner !== undefined) {

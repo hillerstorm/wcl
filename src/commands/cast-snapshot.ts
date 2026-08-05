@@ -1,5 +1,5 @@
 import { gqlRequest, type Instance } from '../client/graphql.js';
-import { PLAYER_DETAILS_QUERY } from '../queries/probe.graphql.js';
+import { PLAYER_DETAILS_QUERY, type PlayerDetailsData } from '../queries/probe.graphql.js';
 import { fetchReportProbe, requireFight } from '../client/probe.js';
 import { fetchEventStream } from '../client/event-stream.js';
 import { writeStdout, CliError } from '../output.js';
@@ -73,7 +73,7 @@ export async function runCastSnapshot(opts: CastSnapshotOptions): Promise<void> 
   const surroundingCasts = playerCasts.filter(e => Math.abs(e.timestamp - T) <= opts.window && e !== cast);
 
   const [detailsR, damage, buffs] = await Promise.all([
-    gqlRequest({
+    gqlRequest<PlayerDetailsData>({
       instance: opts.instance, query: PLAYER_DETAILS_QUERY,
       variables: { code: opts.code, fightId: opts.fightId },
       useCache: opts.useCache, cacheTtlSeconds: SEVEN_DAYS, force: opts.force,
@@ -97,7 +97,7 @@ export async function runCastSnapshot(opts: CastSnapshotOptions): Promise<void> 
     activeDebuffs = activeAurasAt(toAuraEvents(debuffs.events), targetID, T);
   }
 
-  const pd = (detailsR.data as any)?.reportData?.report?.playerDetails?.data?.playerDetails;
+  const pd = detailsR.data?.reportData?.report?.playerDetails?.data?.playerDetails;
   const allPlayers = [...(pd?.dps ?? []), ...(pd?.healers ?? []), ...(pd?.tanks ?? [])];
   const playerDetail = allPlayers.find((p: any) => p.id === actor.id || p.name === opts.name);
 

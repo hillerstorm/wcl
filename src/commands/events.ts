@@ -1,5 +1,5 @@
 import { gqlRequest, type Instance } from '../client/graphql.js';
-import { REPORT_ABILITIES_QUERY } from '../queries/probe.graphql.js';
+import { REPORT_ABILITIES_QUERY, type ReportAbilitiesData } from '../queries/probe.graphql.js';
 import { fetchReportProbe, requireFight, type ProbeActor } from '../client/probe.js';
 import { fetchEventStream } from '../client/event-stream.js';
 import { writeStdout, CliError } from '../output.js';
@@ -143,13 +143,13 @@ export async function runEvents(opts: EventsOptions): Promise<void> {
   };
 
   if (opts.summary) {
-    const abilitiesR = await gqlRequest({
+    const abilitiesR = await gqlRequest<ReportAbilitiesData>({
       instance: opts.instance, query: REPORT_ABILITIES_QUERY,
       variables: { code: opts.code },
       useCache: opts.useCache, cacheTtlSeconds: SEVEN_DAYS, force: opts.force,
     });
     const abilityNames = new Map<number, string>(
-      ((abilitiesR.data as any)?.reportData?.report?.masterData?.abilities ?? []).map((a: any) => [a.gameID, a.name]));
+      (abilitiesR.data?.reportData?.report?.masterData?.abilities ?? []).map(a => [a.gameID, a.name ?? '']));
     const actorNames = new Map<number, string>(actors.map(a => [a.id, a.name ?? '']));
     writeStdout({ ...meta, ...buildSummary(events, abilityNames, actorNames), rateLimit }, opts.pretty);
     return;

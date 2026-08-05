@@ -1,5 +1,5 @@
 import { gqlRequest, type Instance } from '../client/graphql.js';
-import { PLAYER_DETAILS_QUERY } from '../queries/probe.graphql.js';
+import { PLAYER_DETAILS_QUERY, type PlayerDetailsData } from '../queries/probe.graphql.js';
 import { fetchReportProbe, requireFight } from '../client/probe.js';
 import { fetchEventStream } from '../client/event-stream.js';
 import { writeStdout, CliError } from '../output.js';
@@ -29,7 +29,7 @@ export async function runPlayer(opts: PlayerOptions): Promise<void> {
     useCache: opts.useCache, cacheTtlSeconds: SEVEN_DAYS, force: opts.force,
   };
   const [detailsR, casts, damage, buffs] = await Promise.all([
-    gqlRequest({
+    gqlRequest<PlayerDetailsData>({
       instance: opts.instance, query: PLAYER_DETAILS_QUERY,
       variables: { code: opts.code, fightId: opts.fightId },
       useCache: opts.useCache, cacheTtlSeconds: SEVEN_DAYS, force: opts.force,
@@ -39,7 +39,7 @@ export async function runPlayer(opts: PlayerOptions): Promise<void> {
     fetchEventStream({ ...common, dataType: 'Buffs', targetID: actor.id }),
   ]);
 
-  const pd = (detailsR.data as any)?.reportData?.report?.playerDetails?.data?.playerDetails;
+  const pd = detailsR.data?.reportData?.report?.playerDetails?.data?.playerDetails;
   const detail = [...(pd?.dps ?? []), ...(pd?.healers ?? []), ...(pd?.tanks ?? [])]
     .find((p: any) => p.id === actor.id || p.name === opts.name);
 
