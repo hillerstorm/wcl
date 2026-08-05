@@ -137,8 +137,6 @@ export async function gqlRequest(args: RequestArgs): Promise<RequestResult> {
   const payload = (await res.json()) as { data?: unknown; errors?: { message: string }[]; rateLimitData?: unknown };
   const rateLimit = parseRateLimitData(payload as any) ?? parseRateLimitData((payload as any).data);
 
-  try { checkQuota(rateLimit, force); } catch (e) { if (!force) throw e; }
-
   if ((!payload.data || payload.data === null) && payload.errors && payload.errors.length > 0) {
     throw new CliError('GRAPHQL_ERROR', payload.errors.map(e => e.message).join('; '), undefined, payload.errors);
   }
@@ -158,5 +156,10 @@ export async function gqlRequest(args: RequestArgs): Promise<RequestResult> {
   if (useCache && clean && cacheTtlSeconds && cacheTtlSeconds > 0) {
     cacheSet(key, result, cacheTtlSeconds);
   }
+
+  // The points are already spent, so cache first (above) — a --force retry is then served
+  // from cache instead of paying for the same page twice.
+  checkQuota(rateLimit, force);
+
   return result;
 }

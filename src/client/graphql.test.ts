@@ -106,6 +106,22 @@ describe('gqlRequest', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('caches the response before throwing QUOTA_LOW so a --force retry is free', async () => {
+    writeCredentials({ access_token: 'tok', refresh_token: 'r', expires_at: Date.now() + 3_600_000, token_type: 'Bearer' });
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      new Response(JSON.stringify({
+        data: { x: 1 },
+        rateLimitData: { pointsSpentThisHour: 960, limitPerHour: 1000, pointsResetIn: 600 },
+      }), { status: 200 }),
+    );
+
+    await expect(gqlRequest({ instance: 'fresh', query: 'q', variables: { a: 1 }, force: false, useCache: true, cacheTtlSeconds: 3600 }))
+      .rejects.toMatchObject({ code: 'QUOTA_LOW' });
+    const r = await gqlRequest({ instance: 'fresh', query: 'q', variables: { a: 1 }, force: true, useCache: true, cacheTtlSeconds: 3600 });
+    expect(r.data).toEqual({ x: 1 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('throws RATE_LIMITED on 429', async () => {
     writeCredentials({ access_token: 'tok', refresh_token: 'r', expires_at: Date.now() + 3_600_000, token_type: 'Bearer' });
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('', { status: 429 }));
