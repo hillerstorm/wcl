@@ -1,4 +1,6 @@
 import { gqlRequest, type Instance } from '../client/graphql.js';
+import { PLAYER_DETAILS_QUERY } from '../queries/probe.graphql.js';
+import { fetchReportProbe, requireFight } from '../client/probe.js';
 import { fetchEventStream } from '../client/event-stream.js';
 import { writeStdout, CliError } from '../output.js';
 import { activeAurasAt, type RawAuraEvent } from '../snapshot/active-auras.js';
@@ -35,22 +37,9 @@ export async function runCastSnapshot(opts: CastSnapshotOptions): Promise<void> 
     throw new CliError('BAD_INPUT', 'cast-snapshot requires --at <ms> or --ability <id> --index <N>');
   }
 
-  const probe = await gqlRequest({
-    instance: opts.instance,
-    query: /* GraphQL */ `query CSProbe($code: String!, $fightId: Int!) {
-      reportData { report(code: $code) {
-        fights(fightIDs: [$fightId]) { id startTime endTime encounterID kill }
-        masterData { actors { id name type subType } }
-        playerDetails(fightIDs: [$fightId])
-      } }
-    }`,
-    variables: { code: opts.code, fightId: opts.fightId },
-    useCache: opts.useCache, cacheTtlSeconds: SEVEN_DAYS, force: opts.force,
-  });
-  const probeReport = (probe.data as any)?.reportData?.report;
-  const fight = probeReport?.fights?.[0];
-  if (!fight) throw new CliError('NOT_FOUND', `fight ${opts.fightId} not in report ${opts.code}`);
-  const actor = probeReport?.masterData?.actors?.find((a: any) => a.name === opts.name && a.type === 'Player');
+  const probe = await fetchReportProbe({ instance: opts.instance, code: opts.code, useCache: opts.useCache, force: opts.force });
+  const fight = requireFight(probe, opts.fightId, opts.code);
+  const actor = probe.actors.find(a => a.name === opts.name && a.type === 'Player');
   if (!actor) throw new CliError('NOT_FOUND', `player "${opts.name}" not in fight`);
 
   // Actor-filtered, paginated streams: complete data (no silent 10k cap) at a
@@ -83,7 +72,12 @@ export async function runCastSnapshot(opts: CastSnapshotOptions): Promise<void> 
 
   const surroundingCasts = playerCasts.filter(e => Math.abs(e.timestamp - T) <= opts.window && e !== cast);
 
-  const [damage, buffs] = await Promise.all([
+  const [detailsR, damage, buffs] = await Promise.all([
+    gqlRequest({
+      instance: opts.instance, query: PLAYER_DETAILS_QUERY,
+      variables: { code: opts.code, fightId: opts.fightId },
+      useCache: opts.useCache, cacheTtlSeconds: SEVEN_DAYS, force: opts.force,
+    }),
     fetchEventStream({ ...common, dataType: 'DamageDone', sourceID: actor.id }),
     fetchEventStream({ ...common, dataType: 'Buffs', targetID: actor.id }),
   ]);
@@ -103,11 +97,8 @@ export async function runCastSnapshot(opts: CastSnapshotOptions): Promise<void> 
     activeDebuffs = activeAurasAt(toAuraEvents(debuffs.events), targetID, T);
   }
 
-  const allPlayers = [
-    ...(probeReport.playerDetails?.data?.playerDetails?.dps ?? []),
-    ...(probeReport.playerDetails?.data?.playerDetails?.healers ?? []),
-    ...(probeReport.playerDetails?.data?.playerDetails?.tanks ?? []),
-  ];
+  const pd = (detailsR.data as any)?.reportData?.report?.playerDetails?.data?.playerDetails;
+  const allPlayers = [...(pd?.dps ?? []), ...(pd?.healers ?? []), ...(pd?.tanks ?? [])];
   const playerDetail = allPlayers.find((p: any) => p.id === actor.id || p.name === opts.name);
 
   let payload: any = {

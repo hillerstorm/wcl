@@ -70,7 +70,13 @@ describe('events', () => {
         { type: 'damage', timestamp: 1100, sourceID: 33, targetID: 60, abilityGameID: 3044, amount: 500 },
         { type: 'damage', timestamp: 1200, sourceID: 33, targetID: 60, abilityGameID: 3044, amount: 600 },
         { type: 'damage', timestamp: 1300, sourceID: 44, targetID: 60, abilityGameID: 56641, amount: 100 },
-      ], null)), { status: 200 }));
+      ], null)), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        data: { reportData: { report: { masterData: { abilities: [
+          { gameID: 3044, name: 'Arcane Shot' },
+          { gameID: 56641, name: 'Steady Shot' },
+        ] } } } },
+      }), { status: 200 }));
     const out: string[] = [];
     vi.spyOn(process.stdout, 'write').mockImplementation((c: any) => { out.push(c.toString()); return true; });
 
@@ -114,6 +120,28 @@ describe('events', () => {
     const parsed = JSON.parse(out.join(''));
     expect(parsed.truncated).toBe(true);
     expect(parsed.nextPageTimestamp).toBe(150_000);
+  });
+
+  it('fetches the report probe once across fights (per-report cache key)', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url: any, init: any) => {
+      const body = JSON.parse(init.body);
+      const v = body.variables ?? {};
+      const report = v.dataType
+        ? { events: { data: [{ type: 'damage', timestamp: 1100 }], nextPageTimestamp: null } }
+        : { fights: [
+            { id: 13, name: 'Garrosh Hellscream', startTime: 1000, endTime: 301_000 },
+            { id: 14, name: 'Garrosh Hellscream', startTime: 400_000, endTime: 700_000 },
+          ], masterData: { actors: [] } };
+      return new Response(JSON.stringify({ data: { reportData: { report } } }), { status: 200 });
+    });
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    await runEvents({ ...baseOpts, useCache: true, fightId: 13 });
+    await runEvents({ ...baseOpts, useCache: true, fightId: 14 });
+
+    const probeCalls = fetchMock.mock.calls
+      .filter(c => !(JSON.parse((c[1] as any).body).variables?.dataType));
+    expect(probeCalls.length).toBe(1);
   });
 
   it('rejects an unknown --type', async () => {

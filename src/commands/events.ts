@@ -1,5 +1,6 @@
 import { gqlRequest, type Instance } from '../client/graphql.js';
-import { EVENTS_PROBE_QUERY } from '../queries/events.graphql.js';
+import { REPORT_ABILITIES_QUERY } from '../queries/probe.graphql.js';
+import { fetchReportProbe, requireFight, type ProbeActor } from '../client/probe.js';
 import { fetchEventStream } from '../client/event-stream.js';
 import { writeStdout, CliError } from '../output.js';
 
@@ -58,9 +59,7 @@ function normalizeDataType(t: string): string {
   return v;
 }
 
-interface Actor { id: number; name?: string; type?: string; subType?: string; petOwner?: number | null }
-
-function resolveActor(actors: Actor[], ref: string, role: string): number {
+function resolveActor(actors: ProbeActor[], ref: string, role: string): number {
   if (/^\d+$/.test(ref)) return parseInt(ref, 10);
   const matches = actors.filter(a => a.name?.toLowerCase() === ref.toLowerCase());
   if (matches.length === 0) {
@@ -109,16 +108,10 @@ function buildSummary(events: any[], abilityNames: Map<number, string>, actorNam
 export async function runEvents(opts: EventsOptions): Promise<void> {
   const dataType = normalizeDataType(opts.type);
 
-  const probe = await gqlRequest({
-    instance: opts.instance, query: EVENTS_PROBE_QUERY,
-    variables: { code: opts.code, fightId: opts.fightId },
-    useCache: opts.useCache, cacheTtlSeconds: SEVEN_DAYS, force: opts.force,
-  });
-  const probeReport = (probe.data as any)?.reportData?.report;
-  const fight = probeReport?.fights?.[0];
-  if (!fight) throw new CliError('NOT_FOUND', `fight ${opts.fightId} not in report ${opts.code}`);
+  const probe = await fetchReportProbe({ instance: opts.instance, code: opts.code, useCache: opts.useCache, force: opts.force });
+  const fight = requireFight(probe, opts.fightId, opts.code);
 
-  const actors: Actor[] = probeReport?.masterData?.actors ?? [];
+  const actors = probe.actors;
   const sourceID = opts.source !== undefined ? resolveActor(actors, opts.source, 'source') : undefined;
   const targetID = opts.target !== undefined ? resolveActor(actors, opts.target, 'target') : undefined;
 
@@ -150,8 +143,13 @@ export async function runEvents(opts: EventsOptions): Promise<void> {
   };
 
   if (opts.summary) {
+    const abilitiesR = await gqlRequest({
+      instance: opts.instance, query: REPORT_ABILITIES_QUERY,
+      variables: { code: opts.code },
+      useCache: opts.useCache, cacheTtlSeconds: SEVEN_DAYS, force: opts.force,
+    });
     const abilityNames = new Map<number, string>(
-      (probeReport?.masterData?.abilities ?? []).map((a: any) => [a.gameID, a.name]));
+      ((abilitiesR.data as any)?.reportData?.report?.masterData?.abilities ?? []).map((a: any) => [a.gameID, a.name]));
     const actorNames = new Map<number, string>(actors.map(a => [a.id, a.name ?? '']));
     writeStdout({ ...meta, ...buildSummary(events, abilityNames, actorNames), rateLimit }, opts.pretty);
     return;

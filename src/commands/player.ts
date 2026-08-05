@@ -1,5 +1,6 @@
 import { gqlRequest, type Instance } from '../client/graphql.js';
-import { PLAYER_META_QUERY } from '../queries/player.graphql.js';
+import { PLAYER_DETAILS_QUERY } from '../queries/probe.graphql.js';
+import { fetchReportProbe, requireFight } from '../client/probe.js';
 import { fetchEventStream } from '../client/event-stream.js';
 import { writeStdout, CliError } from '../output.js';
 import { isExpansion, type Expansion } from '../enrich/expansion.js';
@@ -14,22 +15,11 @@ export interface PlayerOptions {
 const SEVEN_DAYS = 7 * 24 * 3600;
 
 export async function runPlayer(opts: PlayerOptions): Promise<void> {
-  const meta = await gqlRequest({
-    instance: opts.instance, query: PLAYER_META_QUERY,
-    variables: { code: opts.code, fightId: opts.fightId },
-    useCache: opts.useCache, cacheTtlSeconds: SEVEN_DAYS, force: opts.force,
-  });
-  const report = (meta.data as any)?.reportData?.report;
-  const fight = report?.fights?.[0];
-  if (!fight) throw new CliError('NOT_FOUND', `fight ${opts.fightId} not in report ${opts.code}`);
+  const probe = await fetchReportProbe({ instance: opts.instance, code: opts.code, useCache: opts.useCache, force: opts.force });
+  const fight = requireFight(probe, opts.fightId, opts.code);
 
-  const actor = report?.masterData?.actors?.find((a: any) => a.name === opts.name && a.type === 'Player');
+  const actor = probe.actors.find(a => a.name === opts.name && a.type === 'Player');
   if (!actor) throw new CliError('NOT_FOUND', `player "${opts.name}" not found in report`, 'check spelling / case');
-
-  const dps = report?.playerDetails?.data?.playerDetails?.dps ?? [];
-  const healers = report?.playerDetails?.data?.playerDetails?.healers ?? [];
-  const tanks = report?.playerDetails?.data?.playerDetails?.tanks ?? [];
-  const detail = [...dps, ...healers, ...tanks].find((p: any) => p.id === actor.id || p.name === opts.name);
 
   // Server-side actor filters + pagination: complete streams at a fraction of the
   // API points of the old whole-raid fetch, with no silent 10k-event cap.
@@ -38,11 +28,20 @@ export async function runPlayer(opts: PlayerOptions): Promise<void> {
     start: fight.startTime, end: fight.endTime,
     useCache: opts.useCache, cacheTtlSeconds: SEVEN_DAYS, force: opts.force,
   };
-  const [casts, damage, buffs] = await Promise.all([
+  const [detailsR, casts, damage, buffs] = await Promise.all([
+    gqlRequest({
+      instance: opts.instance, query: PLAYER_DETAILS_QUERY,
+      variables: { code: opts.code, fightId: opts.fightId },
+      useCache: opts.useCache, cacheTtlSeconds: SEVEN_DAYS, force: opts.force,
+    }),
     fetchEventStream({ ...common, dataType: 'Casts', sourceID: actor.id }),
     fetchEventStream({ ...common, dataType: 'DamageDone', sourceID: actor.id }),
     fetchEventStream({ ...common, dataType: 'Buffs', targetID: actor.id }),
   ]);
+
+  const pd = (detailsR.data as any)?.reportData?.report?.playerDetails?.data?.playerDetails;
+  const detail = [...(pd?.dps ?? []), ...(pd?.healers ?? []), ...(pd?.tanks ?? [])]
+    .find((p: any) => p.id === actor.id || p.name === opts.name);
 
   let payload: any = {
     player: { id: actor.id, name: actor.name, subType: actor.subType, detail },
@@ -59,6 +58,6 @@ export async function runPlayer(opts: PlayerOptions): Promise<void> {
     payload = enrich(payload, loadDb(opts.expansion as Expansion));
   }
 
-  const rateLimit = buffs.rateLimit ?? damage.rateLimit ?? casts.rateLimit ?? meta.rateLimit;
+  const rateLimit = buffs.rateLimit ?? damage.rateLimit ?? casts.rateLimit ?? probe.rateLimit;
   writeStdout({ ...payload, rateLimit }, opts.pretty);
 }
