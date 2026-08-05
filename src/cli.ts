@@ -1,7 +1,7 @@
 import { Command } from 'commander';
-import { failAndExit } from './output.js';
+import { CliError, failAndExit } from './output.js';
 import { defaultInstanceForExpansion, isExpansion } from './enrich/expansion.js';
-import type { Instance } from './client/graphql.js';
+import { ALL_INSTANCES, isInstance, type Instance } from './client/graphql.js';
 
 const program = new Command();
 
@@ -16,7 +16,12 @@ program
   .option('--pretty', 'human-readable JSON output');
 
 function resolveInstance(g: { instance?: string; expansion?: string }): Instance {
-  if (g.instance) return g.instance as Instance;
+  if (g.instance) {
+    if (!isInstance(g.instance)) {
+      throw new CliError('BAD_INPUT', `unknown --instance: ${g.instance}`, `one of: ${ALL_INSTANCES.join(', ')}`);
+    }
+    return g.instance;
+  }
   if (g.expansion && isExpansion(g.expansion)) return defaultInstanceForExpansion(g.expansion);
   return 'fresh';
 }

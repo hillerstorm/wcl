@@ -1,16 +1,25 @@
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLI = resolve(__dirname, '../src/cli.ts');
 
 function runCli(args: string[]): { stdout: string; stderr: string; status: number } {
+  // Isolated config/cache dirs so the spawned CLI never sees real credentials.
+  const env = {
+    ...process.env,
+    WCL_CONFIG_DIR: mkdtempSync(join(tmpdir(), 'wcl-cli-cfg-')),
+    WCL_CACHE_DIR: mkdtempSync(join(tmpdir(), 'wcl-cli-cache-')),
+  };
   try {
     const stdout = execFileSync('npx', ['tsx', CLI, ...args], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
+      env,
     });
     return { stdout, stderr: '', status: 0 };
   } catch (e: any) {
@@ -34,5 +43,13 @@ describe('cli', () => {
   it('exits nonzero on unknown subcommand', () => {
     const r = runCli(['nonsense']);
     expect(r.status).not.toBe(0);
+  });
+
+  it('rejects an unknown --instance as BAD_INPUT (exit 7)', () => {
+    const r = runCli(['--instance', 'bogus', 'report', 'ABC123']);
+    expect(r.status).toBe(7);
+    const err = JSON.parse(r.stderr);
+    expect(err.code).toBe('BAD_INPUT');
+    expect(err.hint).toMatch(/fresh/);
   });
 });

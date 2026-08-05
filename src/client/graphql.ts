@@ -15,6 +15,12 @@ export const INSTANCE_HOSTS: Record<Instance, string> = {
   retail: 'https://www.warcraftlogs.com',
 };
 
+export const ALL_INSTANCES = Object.keys(INSTANCE_HOSTS) as readonly Instance[];
+
+export function isInstance(s: unknown): s is Instance {
+  return typeof s === 'string' && (ALL_INSTANCES as readonly string[]).includes(s);
+}
+
 export interface RequestArgs {
   instance: Instance;
   query: string;
