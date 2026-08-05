@@ -153,7 +153,9 @@ export async function gqlRequest(args: RequestArgs): Promise<RequestResult> {
   }
   const result: RequestResult = { data: visible, rateLimit, ...(payload.errors ? { errors: payload.errors } : {}) };
 
-  if (useCache && cacheTtlSeconds && cacheTtlSeconds > 0) {
+  // A response with partial errors may be transiently degraded — never freeze it in the cache.
+  const clean = !payload.errors || payload.errors.length === 0;
+  if (useCache && clean && cacheTtlSeconds && cacheTtlSeconds > 0) {
     cacheSet(key, result, cacheTtlSeconds);
   }
   return result;

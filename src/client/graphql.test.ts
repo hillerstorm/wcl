@@ -94,6 +94,18 @@ describe('gqlRequest', () => {
     expect(sent.indexOf('rateLimitData')).toBeLessThan(sent.indexOf('#'));
   });
 
+  it('does not cache responses carrying partial GraphQL errors', async () => {
+    writeCredentials({ access_token: 'tok', refresh_token: 'r', expires_at: Date.now() + 3_600_000, token_type: 'Bearer' });
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      new Response(JSON.stringify({ data: { x: 1 }, errors: [{ message: 'sub-field timed out' }] }), { status: 200 }),
+    );
+    vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+
+    await gqlRequest({ instance: 'fresh', query: 'q', variables: { a: 1 }, force: true, useCache: true, cacheTtlSeconds: 3600 });
+    await gqlRequest({ instance: 'fresh', query: 'q', variables: { a: 1 }, force: true, useCache: true, cacheTtlSeconds: 3600 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('throws RATE_LIMITED on 429', async () => {
     writeCredentials({ access_token: 'tok', refresh_token: 'r', expires_at: Date.now() + 3_600_000, token_type: 'Bearer' });
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('', { status: 429 }));
