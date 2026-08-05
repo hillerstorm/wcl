@@ -77,7 +77,7 @@ program.command('query')
   .description('Raw GraphQL passthrough')
   .option('--file <path>', 'read query from file')
   .option('--stdin', 'read query from stdin')
-  .option('--var <kv...>', 'variable as key=value (repeatable)', [])
+  .option('--var <kv...>', 'variable as key=value (auto-typed) or key:=json (raw JSON, repeatable)', [])
   .action(async (cmdOpts: { file?: string; stdin?: boolean; var?: string[] }) => {
     const g = program.optsWithGlobals() as any;
     const { runQuery } = await import('./commands/query.js');

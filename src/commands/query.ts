@@ -16,7 +16,19 @@ function parseVars(vars: string[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const raw of vars) {
     const eq = raw.indexOf('=');
-    if (eq < 0) throw new CliError('BAD_INPUT', `--var expects key=value, got "${raw}"`);
+    if (eq < 0) throw new CliError('BAD_INPUT', `--var expects key=value or key:=json, got "${raw}"`);
+    // key:=json (httpie-style) sends the value as raw JSON — the escape hatch
+    // for digit-only strings, arrays, and objects that key=value would coerce.
+    if (eq > 0 && raw[eq - 1] === ':') {
+      const k = raw.slice(0, eq - 1);
+      const v = raw.slice(eq + 1);
+      try {
+        out[k] = JSON.parse(v);
+      } catch {
+        throw new CliError('BAD_INPUT', `--var ${k}:= expects valid JSON, got "${v}"`, `for a string use ${k}:='"${v}"'`);
+      }
+      continue;
+    }
     const k = raw.slice(0, eq);
     const v = raw.slice(eq + 1);
     if (/^-?\d+$/.test(v)) out[k] = parseInt(v, 10);

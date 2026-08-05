@@ -27,7 +27,7 @@ CLI data (`config.json`, `credentials.json`, `.cache/`) lives at the repo root (
 |---|---|
 | `wcl auth [--reset]` | OAuth PKCE flow |
 | `wcl quota` | Show current rate-limit usage |
-| `wcl query --file q.graphql [--var k=v]…` or `wcl query --stdin` | Raw GraphQL escape hatch |
+| `wcl query --file q.graphql [--var k=v] [--var k:=json]…` or `wcl query --stdin` | Raw GraphQL escape hatch (`k=v` auto-types digits/booleans; `k:=json` sends raw JSON, e.g. `code:='"123"'` for a digit-only string) |
 | `wcl report <code>` | Report metadata, fights, masterData |
 | `wcl fights <code> [--boss --kills --encounter <name> --json]` | Compact fight table: id, kill/wipe/trash, duration, start/end ms |
 | `wcl actors <code> [--type player\|pet\|npc\|all --class <c> --name <substr> --owner <player> --json]` | Compact actor table with resolved pet owners |

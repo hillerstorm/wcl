@@ -66,7 +66,7 @@ All output is JSON (add `--pretty` for human-readable). Errors go to stderr as J
 |---|---|
 | `wcl auth [--reset]` | OAuth PKCE flow |
 | `wcl quota` | Current rate-limit usage |
-| `wcl query --file q.graphql [--var k=v]…` | Raw GraphQL escape hatch |
+| `wcl query --file q.graphql [--var k=v] [--var k:=json]…` | Raw GraphQL escape hatch |
 | `wcl report <code>` | Report metadata, fights, masterData |
 | `wcl fights <code>` | Compact fight table |
 | `wcl actors <code>` | Actor table with resolved pet owners |

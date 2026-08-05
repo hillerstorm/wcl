@@ -45,4 +45,40 @@ describe('query command', () => {
     const body = JSON.parse((vi.mocked(globalThis.fetch).mock.calls[0]![1]!.body as string));
     expect(body.variables).toEqual({ id: 42, name: 'Hello' });
   });
+
+  it('parses --var key:=json as raw JSON, allowing digit-only strings', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ data: { ok: true } }), { status: 200 }),
+    );
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    const dir = mkdtempSync(join(tmpdir(), 'wcl-query-'));
+    const path = join(dir, 'q.graphql');
+    writeFileSync(path, 'query Q($code: String!, $ids: [Int!]) { x }');
+
+    await runQuery({
+      instance: 'fresh', force: true, pretty: false, useCache: false, file: path, stdin: false,
+      vars: ['code:="123456789"', 'ids:=[1,2,3]'],
+    });
+
+    const body = JSON.parse((vi.mocked(globalThis.fetch).mock.calls[0]![1]!.body as string));
+    expect(body.variables).toEqual({ code: '123456789', ids: [1, 2, 3] });
+  });
+
+  it('rejects malformed :=json with BAD_INPUT', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ data: { ok: true } }), { status: 200 }),
+    );
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    const dir = mkdtempSync(join(tmpdir(), 'wcl-query-'));
+    const path = join(dir, 'q.graphql');
+    writeFileSync(path, 'query { x }');
+
+    await expect(runQuery({
+      instance: 'fresh', force: true, pretty: false, useCache: false, stdin: false,
+      file: path,
+      vars: ['x:=not-json'],
+    })).rejects.toMatchObject({ code: 'BAD_INPUT' });
+  });
 });
