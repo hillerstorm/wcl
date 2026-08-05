@@ -12,47 +12,75 @@ beforeEach(() => {
 });
 afterEach(() => { vi.restoreAllMocks(); });
 
-const probeReport = {
-  data: { reportData: { report: { fights: [{ id: 3, startTime: 0, endTime: 300_000 }] } } },
-};
+const hillzy = { id: 7, name: 'Hillzy', type: 'Player', subType: 'Hunter' };
+const details = { data: { playerDetails: { dps: [{ id: 7, name: 'Hillzy', combatantInfo: { gear: [], talents: [] } }] } } };
 
-const playerReport = {
-  data: { reportData: { report: {
-    masterData: { actors: [{ id: 7, name: 'Hillzy', type: 'Player', subType: 'Hunter' }] },
-    playerDetails: { data: { playerDetails: { dps: [{ id: 7, name: 'Hillzy', combatantInfo: { gear: [], talents: [] } }] } } },
-    casts: { data: [{ type: 'cast', abilityGameID: 34120, timestamp: 100, sourceID: 7 }] },
-    damage: { data: [] },
-    buffs: { data: [] },
-  } } },
-};
-
-const playerReportEmpty = {
-  data: { reportData: { report: {
-    masterData: { actors: [] },
-    playerDetails: { data: { playerDetails: { dps: [] } } },
-    casts: { data: [] },
-    damage: { data: [] },
-    buffs: { data: [] },
-  } } },
-};
+// Serves the meta query and per-stream event queries based on the request body.
+function mockWcl(actors: any[], streams: Record<string, any[]>) {
+  return vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url: any, init: any) => {
+    const body = JSON.parse(init.body);
+    const v = body.variables ?? {};
+    const report = v.dataType
+      ? { events: { data: streams[v.dataType] ?? [], nextPageTimestamp: null } }
+      : { fights: [{ id: 3, startTime: 0, endTime: 300_000 }], masterData: { actors }, playerDetails: details };
+    return new Response(JSON.stringify({ data: { reportData: { report } } }), { status: 200 });
+  });
+}
 
 describe('player', () => {
   it('resolves player name to actor and emits gear, casts, buffs', async () => {
-    vi.spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(new Response(JSON.stringify(probeReport), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(playerReport), { status: 200 }));
+    const fetchMock = mockWcl([hillzy], {
+      Casts: [{ type: 'cast', abilityGameID: 34120, timestamp: 100, sourceID: 7 }],
+    });
     const out: string[] = [];
     vi.spyOn(process.stdout, 'write').mockImplementation((c: any) => { out.push(c.toString()); return true; });
     await runPlayer({ code: 'ABC', fightId: 3, name: 'Hillzy', instance: 'fresh', force: true, pretty: false, useCache: false });
     const parsed = JSON.parse(out.join(''));
     expect(parsed.player.name).toBe('Hillzy');
     expect(parsed.casts.length).toBe(1);
+    expect(parsed.truncated).toBeUndefined();
+
+    // every event query is filtered to the resolved actor
+    for (const call of fetchMock.mock.calls) {
+      const v = JSON.parse((call[1] as any).body).variables ?? {};
+      if (v.dataType === 'Casts' || v.dataType === 'DamageDone') expect(v.sourceID).toBe(7);
+      if (v.dataType === 'Buffs') expect(v.targetID).toBe(7);
+    }
+  });
+
+  it('paginates event streams past the server page cap', async () => {
+    const c1 = { type: 'cast', abilityGameID: 34120, timestamp: 100, sourceID: 7 };
+    const c2 = { type: 'cast', abilityGameID: 34120, timestamp: 200_000, sourceID: 7 };
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url: any, init: any) => {
+      const body = JSON.parse(init.body);
+      const v = body.variables ?? {};
+      let report: any;
+      if (v.dataType === 'Casts') {
+        report = { events: v.start < 150_000 ? { data: [c1], nextPageTimestamp: 150_000 } : { data: [c2], nextPageTimestamp: null } };
+      } else if (v.dataType) {
+        report = { events: { data: [], nextPageTimestamp: null } };
+      } else if (body.query.includes('casts:')) {
+        // legacy whole-fight query: the server silently caps each stream at one page
+        report = {
+          masterData: { actors: [hillzy] }, playerDetails: details,
+          casts: { data: [c1] }, damage: { data: [] }, buffs: { data: [] },
+        };
+      } else {
+        report = { fights: [{ id: 3, startTime: 0, endTime: 300_000 }], masterData: { actors: [hillzy] }, playerDetails: details };
+      }
+      return new Response(JSON.stringify({ data: { reportData: { report } } }), { status: 200 });
+    });
+
+    const out: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((c: any) => { out.push(c.toString()); return true; });
+    await runPlayer({ code: 'ABC', fightId: 3, name: 'Hillzy', instance: 'fresh', force: true, pretty: false, useCache: false });
+    const parsed = JSON.parse(out.join(''));
+    expect(parsed.casts.map((c: any) => c.timestamp)).toEqual([100, 200_000]);
   });
 
   it('errors NOT_FOUND when name does not exist', async () => {
-    vi.spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(new Response(JSON.stringify(probeReport), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(playerReportEmpty), { status: 200 }));
+    mockWcl([], {});
     await expect(runPlayer({ code: 'ABC', fightId: 3, name: 'Ghost', instance: 'fresh', force: true, pretty: false, useCache: false }))
       .rejects.toMatchObject({ code: 'NOT_FOUND' });
   });

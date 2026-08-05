@@ -1,5 +1,6 @@
 import { gqlRequest, type Instance } from '../client/graphql.js';
-import { EVENTS_QUERY, EVENTS_PROBE_QUERY } from '../queries/events.graphql.js';
+import { EVENTS_PROBE_QUERY } from '../queries/events.graphql.js';
+import { fetchEventStream } from '../client/event-stream.js';
 import { writeStdout, CliError } from '../output.js';
 
 export interface EventsOptions {
@@ -124,32 +125,16 @@ export async function runEvents(opts: EventsOptions): Promise<void> {
   const start = opts.start ?? fight.startTime;
   const end = opts.end ?? fight.endTime;
 
-  const events: any[] = [];
-  let cursor = start;
-  let pages = 0;
-  let nextPageTimestamp: number | null = null;
-  let rateLimit = probe.rateLimit;
-  while (pages < opts.maxPages) {
-    const r = await gqlRequest({
-      instance: opts.instance, query: EVENTS_QUERY,
-      variables: {
-        code: opts.code, fightId: opts.fightId, dataType, start: cursor, end, limit: opts.limit,
-        ...(sourceID !== undefined ? { sourceID } : {}),
-        ...(targetID !== undefined ? { targetID } : {}),
-        ...(opts.ability !== undefined ? { abilityID: opts.ability } : {}),
-      },
-      useCache: opts.useCache, cacheTtlSeconds: SEVEN_DAYS, force: opts.force,
-    });
-    rateLimit = r.rateLimit ?? rateLimit;
-    const page = (r.data as any)?.reportData?.report?.events;
-    if (!page) throw new CliError('NOT_FOUND', `no events returned for fight ${opts.fightId}`);
-    events.push(...(page.data ?? []));
-    pages += 1;
-    nextPageTimestamp = page.nextPageTimestamp ?? null;
-    if (nextPageTimestamp === null) break;
-    cursor = nextPageTimestamp;
-  }
-  const truncated = nextPageTimestamp !== null;
+  const stream = await fetchEventStream({
+    instance: opts.instance, code: opts.code, fightId: opts.fightId, dataType,
+    start, end, limit: opts.limit, maxPages: opts.maxPages,
+    ...(sourceID !== undefined ? { sourceID } : {}),
+    ...(targetID !== undefined ? { targetID } : {}),
+    ...(opts.ability !== undefined ? { abilityID: opts.ability } : {}),
+    useCache: opts.useCache, cacheTtlSeconds: SEVEN_DAYS, force: opts.force,
+  });
+  const { events, pages, truncated, nextPageTimestamp } = stream;
+  const rateLimit = stream.rateLimit ?? probe.rateLimit;
 
   const filter = {
     dataType,

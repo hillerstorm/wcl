@@ -1,5 +1,5 @@
 import { gqlRequest, type Instance } from '../client/graphql.js';
-import { CAST_SNAPSHOT_QUERY } from '../queries/cast-snapshot.graphql.js';
+import { fetchEventStream } from '../client/event-stream.js';
 import { writeStdout, CliError } from '../output.js';
 import { activeAurasAt, type RawAuraEvent } from '../snapshot/active-auras.js';
 import { isExpansion, type Expansion } from '../enrich/expansion.js';
@@ -21,6 +21,15 @@ export interface CastSnapshotOptions {
   expansion?: string;
 }
 
+const SEVEN_DAYS = 7 * 24 * 3600;
+
+function toAuraEvents(events: any[]): RawAuraEvent[] {
+  return events.map((e: any) => ({
+    type: e.type, timestamp: e.timestamp, abilityGameID: e.abilityGameID,
+    sourceID: e.sourceID, targetID: e.targetID, stack: e.stack,
+  }));
+}
+
 export async function runCastSnapshot(opts: CastSnapshotOptions): Promise<void> {
   if (opts.at === undefined && (opts.ability === undefined || opts.index === undefined)) {
     throw new CliError('BAD_INPUT', 'cast-snapshot requires --at <ms> or --ability <id> --index <N>');
@@ -30,12 +39,13 @@ export async function runCastSnapshot(opts: CastSnapshotOptions): Promise<void> 
     instance: opts.instance,
     query: /* GraphQL */ `query CSProbe($code: String!, $fightId: Int!) {
       reportData { report(code: $code) {
-        fights(fightIDs: [$fightId]) { id startTime endTime }
+        fights(fightIDs: [$fightId]) { id startTime endTime encounterID kill }
         masterData { actors { id name type subType } }
+        playerDetails(fightIDs: [$fightId])
       } }
     }`,
     variables: { code: opts.code, fightId: opts.fightId },
-    useCache: opts.useCache, cacheTtlSeconds: 7 * 24 * 3600, force: opts.force,
+    useCache: opts.useCache, cacheTtlSeconds: SEVEN_DAYS, force: opts.force,
   });
   const probeReport = (probe.data as any)?.reportData?.report;
   const fight = probeReport?.fights?.[0];
@@ -43,14 +53,16 @@ export async function runCastSnapshot(opts: CastSnapshotOptions): Promise<void> 
   const actor = probeReport?.masterData?.actors?.find((a: any) => a.name === opts.name && a.type === 'Player');
   if (!actor) throw new CliError('NOT_FOUND', `player "${opts.name}" not in fight`);
 
-  const r = await gqlRequest({
-    instance: opts.instance, query: CAST_SNAPSHOT_QUERY,
-    variables: { code: opts.code, fightId: opts.fightId, start: fight.startTime, end: fight.endTime },
-    useCache: opts.useCache, cacheTtlSeconds: 7 * 24 * 3600, force: opts.force,
-  });
-  const report = (r.data as any)?.reportData?.report;
-
-  const playerCasts: any[] = (report.casts?.data ?? []).filter((e: any) => e.sourceID === actor.id);
+  // Actor-filtered, paginated streams: complete data (no silent 10k cap) at a
+  // fraction of the API points of the old four whole-raid fetches. Full-fight
+  // windows keep the cache entries reusable across snapshots of the same fight.
+  const common = {
+    instance: opts.instance, code: opts.code, fightId: opts.fightId,
+    start: fight.startTime, end: fight.endTime,
+    useCache: opts.useCache, cacheTtlSeconds: SEVEN_DAYS, force: opts.force,
+  };
+  const casts = await fetchEventStream({ ...common, dataType: 'Casts', sourceID: actor.id });
+  const playerCasts: any[] = casts.events;
 
   let cast: any | undefined;
   if (opts.at !== undefined) {
@@ -71,31 +83,30 @@ export async function runCastSnapshot(opts: CastSnapshotOptions): Promise<void> 
 
   const surroundingCasts = playerCasts.filter(e => Math.abs(e.timestamp - T) <= opts.window && e !== cast);
 
-  const damageData: any[] = report.damage?.data ?? [];
-  const damageEvents = damageData.filter(d =>
-    d.sourceID === actor.id &&
+  const [damage, buffs] = await Promise.all([
+    fetchEventStream({ ...common, dataType: 'DamageDone', sourceID: actor.id }),
+    fetchEventStream({ ...common, dataType: 'Buffs', targetID: actor.id }),
+  ]);
+
+  const damageEvents = damage.events.filter((d: any) =>
     d.abilityGameID === cast.abilityGameID &&
     d.timestamp >= cast.timestamp - 50 &&
     d.timestamp <= cast.timestamp + 1500,
   );
 
-  const buffEvents: RawAuraEvent[] = (report.buffs?.data ?? []).map((e: any) => ({
-    type: e.type, timestamp: e.timestamp, abilityGameID: e.abilityGameID,
-    sourceID: e.sourceID, targetID: e.targetID, stack: e.stack,
-  }));
-  const activeBuffs = activeAurasAt(buffEvents, actor.id, T);
+  const activeBuffs = activeAurasAt(toAuraEvents(buffs.events), actor.id, T);
 
   const targetID: number | undefined = cast.targetID ?? damageEvents[0]?.targetID;
-  const debuffEvents: RawAuraEvent[] = (report.debuffs?.data ?? []).map((e: any) => ({
-    type: e.type, timestamp: e.timestamp, abilityGameID: e.abilityGameID,
-    sourceID: e.sourceID, targetID: e.targetID, stack: e.stack,
-  }));
-  const activeDebuffs = targetID !== undefined ? activeAurasAt(debuffEvents, targetID, T) : [];
+  let activeDebuffs: ReturnType<typeof activeAurasAt> = [];
+  if (targetID !== undefined) {
+    const debuffs = await fetchEventStream({ ...common, dataType: 'Debuffs', targetID });
+    activeDebuffs = activeAurasAt(toAuraEvents(debuffs.events), targetID, T);
+  }
 
   const allPlayers = [
-    ...(report.playerDetails?.data?.playerDetails?.dps ?? []),
-    ...(report.playerDetails?.data?.playerDetails?.healers ?? []),
-    ...(report.playerDetails?.data?.playerDetails?.tanks ?? []),
+    ...(probeReport.playerDetails?.data?.playerDetails?.dps ?? []),
+    ...(probeReport.playerDetails?.data?.playerDetails?.healers ?? []),
+    ...(probeReport.playerDetails?.data?.playerDetails?.tanks ?? []),
   ];
   const playerDetail = allPlayers.find((p: any) => p.id === actor.id || p.name === opts.name);
 
@@ -105,8 +116,8 @@ export async function runCastSnapshot(opts: CastSnapshotOptions): Promise<void> 
       id: fight.id,
       startTime: fight.startTime,
       endTime: fight.endTime,
-      encounterID: (report.fights?.[0] as any)?.encounterID,
-      kill: (report.fights?.[0] as any)?.kill,
+      encounterID: fight.encounterID,
+      kill: fight.kill,
     },
     caster: {
       id: actor.id, name: actor.name, subType: actor.subType,
@@ -125,5 +136,5 @@ export async function runCastSnapshot(opts: CastSnapshotOptions): Promise<void> 
     payload = enrich(payload, loadDb(opts.expansion as Expansion));
   }
 
-  writeStdout({ ...payload, rateLimit: r.rateLimit }, opts.pretty);
+  writeStdout({ ...payload, rateLimit: buffs.rateLimit ?? casts.rateLimit ?? probe.rateLimit }, opts.pretty);
 }
