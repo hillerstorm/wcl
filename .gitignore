@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+test/fixtures/.tmp/
+config.json
+credentials.json
+.cache/

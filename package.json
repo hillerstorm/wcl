@@ -1,0 +1,48 @@
+{
+  "name": "@hillerstorm/wcl",
+  "version": "0.1.0",
+  "description": "Warcraft Logs CLI — fetch report data, search public logs, and verify sim damage calculations against real combat logs. PKCE auth, disk caching, rate-limit awareness, WoWSims db.json enrichment.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Johan Hillerström",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hillerstorm/wcl.git"
+  },
+  "homepage": "https://github.com/hillerstorm/wcl#readme",
+  "bugs": "https://github.com/hillerstorm/wcl/issues",
+  "keywords": [
+    "warcraftlogs",
+    "wcl",
+    "wow",
+    "world-of-warcraft",
+    "combat-log",
+    "wowsims",
+    "cli"
+  ],
+  "bin": { "wcl": "./dist/cli.js" },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": { "access": "public" },
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "smoke": "npm run build && node dist/cli.js quota",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "commander": "^15.0.0",
+    "esbuild": "^0.28.1",
+    "graphql-request": "^7.4.0",
+    "open": "^11.0.0",
+    "tsx": "^4.23.6",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}
