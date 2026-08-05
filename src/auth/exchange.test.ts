@@ -55,6 +55,20 @@ describe('token exchange', () => {
       .rejects.toThrow(/401/);
   });
 
+  it('keeps the old refresh token when the refresh response omits one', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        access_token: 'a2',
+        expires_in: 3600,
+        token_type: 'Bearer',
+      }), { status: 200 }),
+    );
+
+    const r = await refreshTokens({ refreshToken: 'OLD', clientId: 'CID' });
+    expect(r.access_token).toBe('a2');
+    expect(r.refresh_token).toBe('OLD');
+  });
+
   it('classifies token-endpoint failures as NOT_AUTHENTICATED', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('invalid_client', { status: 401 }));
     await expect(exchangeCode({ code: 'C', verifier: 'V', redirectUri: 'r', clientId: 'cid' }))

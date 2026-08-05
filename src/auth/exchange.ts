@@ -7,12 +7,12 @@ export interface RefreshArgs { refreshToken: string; clientId: string; }
 
 interface TokenResponse {
   access_token: string;
-  refresh_token: string;
+  refresh_token?: string;  // RFC 6749 §6: the server MAY omit it on refresh
   expires_in: number;
   token_type: 'Bearer';
 }
 
-async function post(body: URLSearchParams): Promise<Credentials> {
+async function post(body: URLSearchParams): Promise<TokenResponse> {
   const res = await fetch(TOKEN_URL, {
     method: 'POST',
     body,
@@ -26,16 +26,19 @@ async function post(body: URLSearchParams): Promise<Credentials> {
       'check the client ID or re-run: wcl auth',
     );
   }
-  const json = (await res.json()) as TokenResponse;
+  return (await res.json()) as TokenResponse;
+}
+
+function toCredentials(json: TokenResponse, refreshToken: string): Credentials {
   return {
     access_token: json.access_token,
-    refresh_token: json.refresh_token,
+    refresh_token: refreshToken,
     expires_at: Date.now() + json.expires_in * 1000,
     token_type: 'Bearer',
   };
 }
 
-export function exchangeCode(a: ExchangeArgs): Promise<Credentials> {
+export async function exchangeCode(a: ExchangeArgs): Promise<Credentials> {
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
     code: a.code,
@@ -43,14 +46,19 @@ export function exchangeCode(a: ExchangeArgs): Promise<Credentials> {
     client_id: a.clientId,
     code_verifier: a.verifier,
   });
-  return post(body);
+  const json = await post(body);
+  if (!json.refresh_token) {
+    throw new CliError('NOT_AUTHENTICATED', 'token endpoint returned no refresh_token');
+  }
+  return toCredentials(json, json.refresh_token);
 }
 
-export function refreshTokens(a: RefreshArgs): Promise<Credentials> {
+export async function refreshTokens(a: RefreshArgs): Promise<Credentials> {
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
     refresh_token: a.refreshToken,
     client_id: a.clientId,
   });
-  return post(body);
+  const json = await post(body);
+  return toCredentials(json, json.refresh_token ?? a.refreshToken);
 }
