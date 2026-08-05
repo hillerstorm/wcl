@@ -1,5 +1,6 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { CliError } from '../output.js';
 
 export interface CallbackResult { code: string; state: string; }
 
@@ -48,7 +49,20 @@ export async function startCallbackServer(port = 31337): Promise<CallbackServer>
     }
   });
 
-  await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', () => resolve()));
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', (e: NodeJS.ErrnoException) => {
+      if (e.code === 'EADDRINUSE') {
+        reject(new CliError(
+          'NETWORK_ERROR',
+          `Callback port ${port} is already in use.`,
+          'close the process holding it (an abandoned "wcl auth"?) and retry',
+        ));
+      } else {
+        reject(new CliError('NETWORK_ERROR', `Callback server failed to start: ${e.message}`));
+      }
+    });
+    server.listen(port, '127.0.0.1', () => resolve());
+  });
   const addr = server.address() as AddressInfo;
 
   return {

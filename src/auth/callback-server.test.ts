@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { startCallbackServer } from './callback-server.js';
 
 describe('callback server', () => {
@@ -22,6 +24,20 @@ describe('callback server', () => {
       await expectation;
     } finally {
       close();
+    }
+  });
+
+  it('rejects with a structured error when the port is already in use', async () => {
+    const blocker = createServer();
+    await new Promise<void>((resolve) => blocker.listen(0, '127.0.0.1', resolve));
+    const port = (blocker.address() as AddressInfo).port;
+    try {
+      await expect(startCallbackServer(port)).rejects.toMatchObject({
+        code: 'NETWORK_ERROR',
+        message: expect.stringMatching(/in use/i),
+      });
+    } finally {
+      blocker.close();
     }
   });
 
