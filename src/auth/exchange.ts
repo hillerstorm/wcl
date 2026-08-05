@@ -1,5 +1,6 @@
 import type { Credentials } from './store.js';
 import { TOKEN_URL } from './constants.js';
+import { CliError } from '../output.js';
 
 export interface ExchangeArgs { code: string; verifier: string; redirectUri: string; clientId: string; }
 export interface RefreshArgs { refreshToken: string; clientId: string; }
@@ -19,7 +20,11 @@ async function post(body: URLSearchParams): Promise<Credentials> {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    throw new Error(`token endpoint returned ${res.status}: ${text.slice(0, 200)}`);
+    throw new CliError(
+      'NOT_AUTHENTICATED',
+      `token endpoint returned ${res.status}: ${text.slice(0, 200)}`,
+      'check the client ID or re-run: wcl auth',
+    );
   }
   const json = (await res.json()) as TokenResponse;
   return {

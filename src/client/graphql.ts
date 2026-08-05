@@ -39,7 +39,8 @@ async function ensureFreshCredentials(): Promise<Credentials> {
       writeCredentials(refreshed);
       creds = refreshed;
     } catch (e) {
-      throw new CliError('NOT_AUTHENTICATED', 'Token refresh failed.', 'run: wcl auth --reset', { cause: String(e) });
+      const cause = e instanceof Error ? e.message : String(e);
+      throw new CliError('NOT_AUTHENTICATED', 'Token refresh failed.', 'run: wcl auth --reset', { cause });
     }
   }
   return creds;

@@ -54,4 +54,10 @@ describe('token exchange', () => {
     await expect(exchangeCode({ code: 'C', verifier: 'V', redirectUri: 'r', clientId: 'cid' }))
       .rejects.toThrow(/401/);
   });
+
+  it('classifies token-endpoint failures as NOT_AUTHENTICATED', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('invalid_client', { status: 401 }));
+    await expect(exchangeCode({ code: 'C', verifier: 'V', redirectUri: 'r', clientId: 'cid' }))
+      .rejects.toMatchObject({ code: 'NOT_AUTHENTICATED' });
+  });
 });
