@@ -7,6 +7,9 @@ import { dirname, join, resolve } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLI = resolve(__dirname, '../src/cli.ts');
+// Invoke tsx directly — going through npx pollutes stderr with npm warnings,
+// which breaks the tests that parse stderr as JSON.
+const TSX = resolve(__dirname, '../node_modules/.bin/tsx');
 
 function runCli(args: string[]): { stdout: string; stderr: string; status: number } {
   // Isolated config/cache dirs so the spawned CLI never sees real credentials.
@@ -16,7 +19,7 @@ function runCli(args: string[]): { stdout: string; stderr: string; status: numbe
     WCL_CACHE_DIR: mkdtempSync(join(tmpdir(), 'wcl-cli-cache-')),
   };
   try {
-    const stdout = execFileSync('npx', ['tsx', CLI, ...args], {
+    const stdout = execFileSync(TSX, [CLI, ...args], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
       env,

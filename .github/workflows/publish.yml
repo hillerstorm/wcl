@@ -34,9 +34,7 @@ jobs:
           node-version: 24
           registry-url: 'https://registry.npmjs.org'
 
-      # Trusted publishing requires npm >= 11.5.1
-      - run: npm install -g npm@latest
-
+      # Trusted publishing requires npm >= 11.5.1 (bundled with current node 24)
       - run: npm ci
 
       - name: Bump version
