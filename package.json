@@ -21,7 +21,7 @@
     "cli"
   ],
   "bin": {
-    "wcl": "./dist/cli.js"
+    "wcl": "dist/cli.js"
   },
   "files": [
     "dist"
