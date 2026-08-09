@@ -2,13 +2,14 @@ import { Command } from 'commander';
 import { CliError, failAndExit } from './output.js';
 import { defaultInstanceForExpansion, isExpansion } from './enrich/expansion.js';
 import { ALL_INSTANCES, isInstance, type Instance } from './client/graphql.js';
+import pkg from '../package.json';
 
 const program = new Command();
 
 program
   .name('wcl')
   .description('Warcraft Logs CLI — fetch, search, and verify against the WCL GraphQL API')
-  .version('1.0.0')
+  .version(pkg.version)
   .option('--instance <inst>', 'WCL instance: fresh (TBC) | classic (MoP) | vanilla (Era) | sod | retail')
   .option('--expansion <exp>', 'sim project for enrichment: tbc | mop | classic | sod')
   .option('--no-cache', 'bypass disk cache for this call')
