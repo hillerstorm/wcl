@@ -31,7 +31,7 @@ CLI data (`config.json`, `credentials.json`, `.cache/`) lives at the repo root (
 | `wcl report <code>` | Report metadata, fights, masterData |
 | `wcl fights <code> [--boss --kills --encounter <name> --json]` | Compact fight table: id, kill/wipe/trash, duration, start/end ms |
 | `wcl actors <code> [--type player\|pet\|npc\|all --class <c> --name <substr> --owner <player> --json]` | Compact actor table with resolved pet owners |
-| `wcl events <code> <fightId> [--type damage\|casts\|buffs\|debuffs\|healing\|…] [--source <id\|name>] [--target <id\|name>] [--ability <id>] [--start/--end ms] [--jsonl \| --summary]` | Full event stream, auto-paginated past the 10k limit |
+| `wcl events <code> <fightId> [--type damage\|casts\|buffs\|debuffs\|healing\|…] [--source <id\|name>] [--target <id\|name>] [--ability <id>] [--hostile] [--start/--end ms] [--jsonl \| --summary]` | Full event stream, auto-paginated past the 10k limit |
 | `wcl fight <code> <fightId>` | Fight metadata + damage-done table |
 | `wcl player <code> <fightId> <name>` | Player snapshot, casts, damage, buffs |
 | `wcl cast-snapshot <code> <fightId> <name> --at <ms> [--window N]` | Full snapshot for a single cast |
@@ -72,6 +72,8 @@ Each expansion's sim-repo path is read from `config.json` (`simPaths.<expansion>
 3. `wcl actors <code> [--class <c>]` — resolve player/pet actor IDs; `--owner <player>` lists a player's pets.
 4. `wcl events <code> <fightId> --source <player> --summary` — per-ability damage totals and counts, or
    `--type buffs --ability <id> --jsonl` for a raw event stream. Auto-paginates; source/target accept names.
+   Events default to the friendlies' perspective — add `--hostile` for boss/NPC activity
+   (e.g. `--type casts --hostile --source <boss>` for a boss rotation, or `--type damage --hostile` for raid damage taken).
    Do NOT hand-write `events(...)` GraphQL via `wcl query` — `wcl events` covers filtering, pagination, and name resolution.
 5. `wcl cast-snapshot <code> <fightId> <player> --at <ms> --expansion <exp>` — full
    snapshot for sim comparison. The response includes:

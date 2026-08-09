@@ -13,6 +13,7 @@ export interface EventStreamArgs {
   sourceID?: number;
   targetID?: number;
   abilityID?: number;
+  hostility?: 'Friendlies' | 'Enemies';
   limit?: number;
   maxPages?: number;
   useCache: boolean;
@@ -50,6 +51,7 @@ export async function fetchEventStream(args: EventStreamArgs): Promise<EventStre
         ...(args.sourceID !== undefined ? { sourceID: args.sourceID } : {}),
         ...(args.targetID !== undefined ? { targetID: args.targetID } : {}),
         ...(args.abilityID !== undefined ? { abilityID: args.abilityID } : {}),
+        ...(args.hostility !== undefined ? { hostility: args.hostility } : {}),
       },
       useCache: args.useCache, cacheTtlSeconds: args.cacheTtlSeconds, force: args.force,
     });

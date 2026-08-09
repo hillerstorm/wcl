@@ -34,7 +34,7 @@ function eventsPage(events: unknown[], next: number | null) {
 
 const baseOpts = {
   code: 'ABC', fightId: 13, type: 'damage', limit: 10000, maxPages: 20,
-  jsonl: false, summary: false,
+  hostile: false, jsonl: false, summary: false,
   instance: 'fresh' as const, force: true, pretty: false, useCache: false,
 };
 
@@ -142,6 +142,37 @@ describe('events', () => {
     const probeCalls = fetchMock.mock.calls
       .filter(c => !(JSON.parse((c[1] as any).body).variables?.dataType));
     expect(probeCalls.length).toBe(1);
+  });
+
+  it('--hostile passes hostilityType Enemies and records it in the filter', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify(probe), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(eventsPage(
+        [{ type: 'cast', timestamp: 1100, sourceID: 60, abilityGameID: 144821 }], null)), { status: 200 }));
+    const out: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((c: any) => { out.push(c.toString()); return true; });
+
+    await runEvents({ ...baseOpts, type: 'casts', hostile: true });
+
+    const eventsBody = JSON.parse((fetchSpy.mock.calls[1]![1] as any).body);
+    expect(eventsBody.variables.hostility).toBe('Enemies');
+    const parsed = JSON.parse(out.join(''));
+    expect(parsed.filter.hostility).toBe('Enemies');
+    expect(parsed.count).toBe(1);
+  });
+
+  it('omits hostility from variables and filter by default', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify(probe), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(eventsPage([], null)), { status: 200 }));
+    const out: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((c: any) => { out.push(c.toString()); return true; });
+
+    await runEvents({ ...baseOpts });
+
+    const eventsBody = JSON.parse((fetchSpy.mock.calls[1]![1] as any).body);
+    expect('hostility' in eventsBody.variables).toBe(false);
+    expect('hostility' in JSON.parse(out.join('')).filter).toBe(false);
   });
 
   it('rejects an unknown --type', async () => {

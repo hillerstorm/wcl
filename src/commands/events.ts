@@ -11,6 +11,7 @@ export interface EventsOptions {
   source?: string;
   target?: string;
   ability?: number;
+  hostile: boolean;
   start?: number;
   end?: number;
   limit: number;
@@ -124,6 +125,7 @@ export async function runEvents(opts: EventsOptions): Promise<void> {
     ...(sourceID !== undefined ? { sourceID } : {}),
     ...(targetID !== undefined ? { targetID } : {}),
     ...(opts.ability !== undefined ? { abilityID: opts.ability } : {}),
+    ...(opts.hostile ? { hostility: 'Enemies' as const } : {}),
     useCache: opts.useCache, cacheTtlSeconds: SEVEN_DAYS, force: opts.force,
   });
   const { events, pages, truncated, nextPageTimestamp } = stream;
@@ -134,6 +136,7 @@ export async function runEvents(opts: EventsOptions): Promise<void> {
     ...(sourceID !== undefined ? { sourceID } : {}),
     ...(targetID !== undefined ? { targetID } : {}),
     ...(opts.ability !== undefined ? { abilityID: opts.ability } : {}),
+    ...(opts.hostile ? { hostility: 'Enemies' } : {}),
     start, end,
   };
   const meta = {

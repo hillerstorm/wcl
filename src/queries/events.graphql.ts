@@ -7,10 +7,10 @@ export interface EventsPageData {
 }
 
 export const EVENTS_QUERY = /* GraphQL */ `
-  query Events($code: String!, $fightId: Int!, $dataType: EventDataType!, $start: Float!, $end: Float!, $sourceID: Int, $targetID: Int, $abilityID: Float, $limit: Int!) {
+  query Events($code: String!, $fightId: Int!, $dataType: EventDataType!, $start: Float!, $end: Float!, $sourceID: Int, $targetID: Int, $abilityID: Float, $hostility: HostilityType, $limit: Int!) {
     reportData {
       report(code: $code) {
-        events(fightIDs: [$fightId], dataType: $dataType, startTime: $start, endTime: $end, sourceID: $sourceID, targetID: $targetID, abilityID: $abilityID, limit: $limit) {
+        events(fightIDs: [$fightId], dataType: $dataType, startTime: $start, endTime: $end, sourceID: $sourceID, targetID: $targetID, abilityID: $abilityID, hostilityType: $hostility, limit: $limit) {
           data
           nextPageTimestamp
         }

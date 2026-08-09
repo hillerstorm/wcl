@@ -169,6 +169,7 @@ interface EventsCmdOpts {
   source?: string;
   target?: string;
   ability?: number;
+  hostile?: boolean;
   start?: number;
   end?: number;
   limit: number;
@@ -185,6 +186,7 @@ program.command('events')
   .option('--source <idOrName>', 'filter by source actor (numeric ID or name)')
   .option('--target <idOrName>', 'filter by target actor (numeric ID or name)')
   .option('--ability <id>', 'filter by ability game ID', intArg('--ability'))
+  .option('--hostile', 'fetch events from the enemies\' perspective (boss/NPC casts, damage, buffs); default is friendlies only')
   .option('--start <ms>', 'override window start (absolute report ms; default: fight start)', intArg('--start'))
   .option('--end <ms>', 'override window end (absolute report ms; default: fight end)', intArg('--end'))
   .option('--limit <n>', 'events per page', intArg('--limit'), 10000)
@@ -199,6 +201,7 @@ program.command('events')
       ...(cmdOpts.source !== undefined ? { source: cmdOpts.source } : {}),
       ...(cmdOpts.target !== undefined ? { target: cmdOpts.target } : {}),
       ...(cmdOpts.ability !== undefined ? { ability: cmdOpts.ability } : {}),
+      hostile: !!cmdOpts.hostile,
       ...(cmdOpts.start !== undefined ? { start: cmdOpts.start } : {}),
       ...(cmdOpts.end !== undefined ? { end: cmdOpts.end } : {}),
       limit: cmdOpts.limit, maxPages: cmdOpts.maxPages,
