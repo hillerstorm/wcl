@@ -26,6 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # full history + tags, for the release-notes commit list
 
       - uses: actions/setup-node@v5
         with:
@@ -42,6 +44,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          echo "prev=$(git describe --tags --abbrev=0)" >> "$GITHUB_OUTPUT"
           TAG=$(npm version "${{ inputs.version != '' && inputs.version || inputs.bump }}" -m "Release v%s")
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
@@ -52,6 +55,15 @@ jobs:
       - run: git push --follow-tags
 
       - name: Create GitHub release
-        run: gh release create "${{ steps.bump.outputs.tag }}" --title "${{ steps.bump.outputs.tag }}" --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
+          PREV: ${{ steps.bump.outputs.prev }}
+          TAG: ${{ steps.bump.outputs.tag }}
+        run: |
+          {
+            # $TAG^ excludes the "Release vX.Y.Z" commit itself
+            git log --oneline --reverse "$PREV..$TAG^" | sed 's/^/* /'
+            echo
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREV...$TAG"
+          } > "$RUNNER_TEMP/notes.md"
+          gh release create "$TAG" --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
