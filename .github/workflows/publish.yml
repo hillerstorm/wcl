@@ -43,7 +43,14 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           echo "prev=$(git describe --tags --abbrev=0)" >> "$GITHUB_OUTPUT"
-          TAG=$(npm version "${{ inputs.version != '' && inputs.version || inputs.bump }}" -m "Release v%s")
+          CURRENT=$(node -p "require('./package.json').version")
+          if [ -n "${{ inputs.version }}" ] && [ "${{ inputs.version }}" = "$CURRENT" ]; then
+            # The bump already landed as a commit (e.g. "Release vX.Y.Z" made by hand): tag it, don't re-bump.
+            TAG="v$CURRENT"
+            git tag -a "$TAG" -m "Release $CURRENT"
+          else
+            TAG=$(npm version "${{ inputs.version != '' && inputs.version || inputs.bump }}" -m "Release v%s")
+          fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       # prepublishOnly runs typecheck + tests + build; auth via OIDC, no token.
