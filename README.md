@@ -58,7 +58,7 @@ wcl player <reportCode> <fightId> "Playername"     # full player snapshot
 wcl character "Playername" <server-slug> <region>  # zone rankings
 ```
 
-All output is JSON (add `--pretty` for human-readable). Errors go to stderr as JSON with stable `code` values and exit codes.
+Output is JSON (add `--pretty` for human-readable), except `fights`, `actors` and `character`, which print a text table unless `--json`. Errors go to stderr as JSON with stable `code` values and exit codes; stdout stays empty on failure.
 
 ## Commands
 
@@ -92,7 +92,7 @@ Override with `$WCL_CONFIG_DIR`, `$WCL_CACHE_DIR`, `$WCL_CLIENT_ID`, `$WCL_WOWSI
 
 ## Rate limits & caching
 
-WCL grants a points-per-hour quota. Every response carries a `rateLimit` footer; the CLI refuses new requests above 95% usage unless `--force` is passed. Report-shaped data is cached on disk for 7 days, searches for 1 hour.
+WCL grants a points-per-hour quota. Every response carries a `rateLimit` footer; the CLI refuses new requests above 95% usage unless `--force` is passed (`wcl quota` always reports, so you can read the reset time). Report-shaped data is cached on disk for 7 days, searches for 1 hour.
 
 ## Using as an agent skill
 

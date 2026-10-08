@@ -74,11 +74,11 @@ program.command('auth')
   }));
 
 program.command('quota')
-  .description('Show current WCL rate-limit usage')
+  .description('Show current WCL rate-limit usage (never blocked by the quota guard)')
   .action(wrapAction(async () => {
     const g = globals();
     const { runQuota } = await import('./commands/quota.js');
-    await runQuota({ instance: resolveInstance(g), force: !!g.force, pretty: !!g.pretty });
+    await runQuota({ instance: resolveInstance(g), pretty: !!g.pretty });
   }));
 
 program.command('query')

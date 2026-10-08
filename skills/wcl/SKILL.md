@@ -86,12 +86,41 @@ Each expansion's sim-repo path is read from `config.json` (`simPaths.<expansion>
 
 ## Gear (`wcl gear`)
 
-Fetches the gear snapshot WCL audits at the start of each boss fight, via `playerDetails(includeCombatantInfo: true)`. Boss fights only (`encounterID != 0`) — on trash pulls WCL returns no combatant info. Returns 19-slot `gearIds[]` (0 = empty slot) plus per-item `itemId`, `slotName`, `itemLevel`, `quality`, `enchantId`/`enchantName`, `temporaryEnchantId`/`temporaryEnchantName` (Windfury, poisons, sharpening stones), `gemIds[]`, `setId`. With `--expansion`, every item is joined against the sim's `db.json` and the result includes `simItem.scalingOptions.stats` ready for sim consumption.
+Fetches the gear snapshot WCL audits at the start of each boss fight, via `playerDetails(includeCombatantInfo: true)`. Boss fights only (`encounterID != 0`) — on trash pulls WCL returns no combatant info (exit 7, `BAD_INPUT`). Returns 19-slot `gearIds[]` (0 = empty slot) plus per-item `itemId`, `slotName`, `itemLevel`, `quality`, `enchantId`/`enchantName`, `temporaryEnchantId`/`temporaryEnchantName` (Windfury, poisons, sharpening stones), `gemIds[]`, `setId`. With `--expansion`, every item is joined against the sim's `db.json` and the result includes `simItem.scalingOptions.stats` ready for sim consumption.
+
+## JSON output shapes
+
+Every API-backed JSON command prints ONE top-level object with a `rateLimit` key — index by key, never `[0]`. Exceptions: `quota` prints the rate-limit object itself, `events --jsonl` prints bare events, `cache` is local. `fights`, `actors` and `character` print a text table unless `--json`.
+
+| Command | Top-level keys |
+|---|---|
+| `report` | `report`, `rateLimit` |
+| `fights --json` | `fights`, `rateLimit` |
+| `actors --json` | `actors`, `rateLimit` |
+| `fight` | `fight`, `damageDone`, `rateLimit` |
+| `events` | `fight`, `filter`, `count`, `pages`, `truncated`?, `nextPageTimestamp`?, `events`, `rateLimit` |
+| `events --summary` | as `events`, but `byType`, `byAbility`, `bySource`, `byTarget` instead of `events` |
+| `events --jsonl` | no wrapper: one raw event object per line, no `rateLimit` |
+| `player` | `player`, `casts`, `damage`, `buffs`, `truncated`?, `rateLimit` |
+| `cast-snapshot` | `cast`, `fight`, `caster`, `target`, `damageEvents`, `surroundingCasts`, `rateLimit` |
+| `gear` | `player`, `fight`, `gearIds`, `items`, `rateLimit` — the per-item list is `items`, not `gear` |
+| `search` | `encounter`, `rankings`, `page`, `hasMorePages`, `rateLimit` |
+| `character --json` | `character`, `rateLimit` |
+| `query` | `data`, `rateLimit`, `errors`? |
+| `quota` | `pointsSpent`, `pointsAllowed`, `pointsResetIn`, `ratio` (same shape as every `rateLimit`) |
+| `cache stats` / `cache clear` | `entries`, `bytes`, `dir` / `removed` |
+
+```sh
+wcl actors <code> --json | jq '.actors[] | select(.name == "Foo") | .id'
+wcl gear <code> <fightId> Foo | jq '.items[] | {slotName, itemId, enchantId}'
+```
+
+On failure stdout is EMPTY: the error JSON goes to stderr and the exit code is non-zero (see Errors). Never `2>/dev/null` a wcl call — `wcl gear … > f 2>/dev/null` leaves an empty file that fails to parse ("Expecting value: line 1 column 1") and hides the real cause (trash pull, wrong name, 401, quota). Redirect stderr to a file (`2>err.txt`) or leave it visible, and read it before retrying. Judge success by the exit code, not by stderr being empty: a successful call can still print a `partial-graphql-errors` warning there.
 
 ## Rate limit
 
-WCL uses a points-per-hour quota. Every response carries a `rateLimit` field. The skill
-refuses requests when usage > 95% unless `--force` is passed. Cache TTLs:
+WCL uses a points-per-hour quota. API-backed JSON output carries a `rateLimit` field (stored with the response, so stale on a cache hit — `wcl quota` is live). The skill
+refuses requests when usage > 95% unless `--force` is passed; `wcl quota` itself is never blocked. Cache TTLs:
 report/fights/actors/fight/player/events/cast-snapshot = 7 days (events cache per page), search = 1 hour, quota = never cached.
 
 ## Errors
@@ -102,7 +131,7 @@ All errors are emitted as JSON on stderr with `{ code, message, hint?, details? 
 |---|---|---|
 | `BAD_INPUT` | 7 | usage error |
 | `NOT_AUTHENTICATED` | 2 | run `wcl auth` |
-| `QUOTA_LOW` | 3 | wait `details.resetInSeconds` or `--force` |
+| `QUOTA_LOW` | 3 | usage > 95%. Reset time: `details.resetInSeconds` in this error, or `wcl quota` → `pointsResetIn` (v1.2.0+ always reports; older versions guard `quota` too — use `wcl quota --force`). `--force` bypasses the guard for one call. Sweeps: stop on exit 3, sleep until reset, resume — never loop with `--force`. |
 | `RATE_LIMITED` | 4 | server-side 429 — wait and retry |
 | `GRAPHQL_ERROR` | 1 | WCL returned errors |
 | `NOT_FOUND` | 5 | report/fight/player not found |

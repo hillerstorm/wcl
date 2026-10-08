@@ -13,18 +13,32 @@ beforeEach(() => {
 
 afterEach(() => { vi.restoreAllMocks(); });
 
+function mockRateLimit(spent: number, limit: number, resetIn: number): string[] {
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    new Response(JSON.stringify({ data: {}, rateLimitData: { pointsSpentThisHour: spent, limitPerHour: limit, pointsResetIn: resetIn } }), { status: 200 }),
+  );
+  const lines: string[] = [];
+  vi.spyOn(process.stdout, 'write').mockImplementation((c: any) => { lines.push(c.toString()); return true; });
+  return lines;
+}
+
 describe('quota command', () => {
   it('prints rate-limit JSON', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ data: {}, rateLimitData: { pointsSpentThisHour: 5, limitPerHour: 1000, pointsResetIn: 600 } }), { status: 200 }),
-    );
-    const lines: string[] = [];
-    vi.spyOn(process.stdout, 'write').mockImplementation((c: any) => { lines.push(c.toString()); return true; });
+    const lines = mockRateLimit(5, 1000, 600);
 
-    await runQuota({ instance: 'fresh', force: true, pretty: false });
+    await runQuota({ instance: 'fresh', pretty: false });
 
     const parsed = JSON.parse(lines.join(''));
     expect(parsed.pointsSpent).toBe(5);
     expect(parsed.pointsAllowed).toBe(1000);
+  });
+
+  it('still reports above the 95% QUOTA_LOW threshold (the guard never blocks quota)', async () => {
+    const lines = mockRateLimit(960, 1000, 1234);
+
+    await runQuota({ instance: 'fresh', pretty: false });
+
+    const parsed = JSON.parse(lines.join(''));
+    expect(parsed).toEqual({ pointsSpent: 960, pointsAllowed: 1000, pointsResetIn: 1234, ratio: 0.96 });
   });
 });
