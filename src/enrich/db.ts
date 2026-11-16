@@ -18,7 +18,8 @@ export function loadDb(exp: Expansion): SimDb | null {
     cache.set(exp, null);
     return null;
   }
-  const dbPath = join(expPath, 'assets', 'database', 'db.json');
+  const dbDir = join(expPath, 'assets', 'database');
+  const dbPath = join(dbDir, 'db.json');
   if (!existsSync(dbPath)) {
     process.stderr.write(`warning: enrichment skipped — ${dbPath} not found\n`);
     cache.set(exp, null);
@@ -26,12 +27,31 @@ export function loadDb(exp: Expansion): SimDb | null {
   }
   try {
     const db = JSON.parse(readFileSync(dbPath, 'utf8')) as SimDb;
+    mergeLeftoverItems(db, join(dbDir, 'leftover_db.json'));
     cache.set(exp, db);
     return db;
   } catch (e) {
     process.stderr.write(`warning: enrichment skipped — failed to parse ${dbPath}: ${String(e)}\n`);
     cache.set(exp, null);
     return null;
+  }
+}
+
+/**
+ * The sims keep items their UI filters out (quest greens, random-suffix gear, …) in
+ * leftover_db.json. Logs are full of those — most of a levelling Forever character's gear —
+ * so append them for by-ID lookups. db.json wins on a duplicate ID.
+ */
+function mergeLeftoverItems(db: SimDb, leftoverPath: string): void {
+  if (!existsSync(leftoverPath)) return;
+  try {
+    const leftover = JSON.parse(readFileSync(leftoverPath, 'utf8')) as SimDb;
+    if (!Array.isArray(leftover.items)) return;
+    const items = db.items ?? [];
+    const known = new Set(items.map(i => i.id));
+    db.items = [...items, ...leftover.items.filter(i => i != null && !known.has(i.id))];
+  } catch (e) {
+    process.stderr.write(`warning: ignoring ${leftoverPath}: ${String(e)}\n`);
   }
 }
 

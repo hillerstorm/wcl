@@ -72,6 +72,13 @@ describe('cast-snapshot', () => {
       .map(c => JSON.parse((c[1] as any).body).variables ?? {})
       .find(v => v.dataType === 'Debuffs');
     expect(debuffCall?.targetID).toBe(99);
+
+    // gear/talents only come back when combatant info is requested
+    expect(parsed.caster.gear).toEqual([{ id: 30900 }]);
+    const detailsCall = fetchMock.mock.calls
+      .map(c => JSON.parse((c[1] as any).body).query as string)
+      .find(q => q.includes('playerDetails'));
+    expect(detailsCall).toContain('includeCombatantInfo: true');
   });
 
   it('finds a cast beyond the first event page (no silent truncation)', async () => {

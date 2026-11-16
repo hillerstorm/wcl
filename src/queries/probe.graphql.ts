@@ -53,11 +53,12 @@ export const REPORT_ABILITIES_QUERY = /* GraphQL */ `
   }
 `;
 
+// Without includeCombatantInfo WCL returns combatantInfo as an empty array (no gear, talents or stats).
 export const PLAYER_DETAILS_QUERY = /* GraphQL */ `
   query PlayerDetails($code: String!, $fightId: Int!) {
     reportData {
       report(code: $code) {
-        playerDetails(fightIDs: [$fightId])
+        playerDetails(fightIDs: [$fightId], includeCombatantInfo: true)
       }
     }
   }

@@ -5,15 +5,24 @@ import { CliError } from '../output.js';
 import { cacheGet, cacheSet, cacheKey } from './cache.js';
 import { parseRateLimitData, checkQuota, RATE_LIMIT_FIELD, type RateLimit } from './rate-limit.js';
 
-export type Instance = 'fresh' | 'classic' | 'vanilla' | 'sod' | 'retail';
+export type Instance = 'fresh' | 'classic' | 'vanilla' | 'sod' | 'forever' | 'retail';
 
 export const INSTANCE_HOSTS: Record<Instance, string> = {
   fresh: 'https://fresh.warcraftlogs.com',
   classic: 'https://classic.warcraftlogs.com',
   vanilla: 'https://vanilla.warcraftlogs.com',
   sod: 'https://sod.warcraftlogs.com',
+  // forever.warcraftlogs.com serves no /api/v2 (404). WCL shares one backend, so Forever
+  // reports, zones and characters are reachable through any API host; use the main one.
+  forever: 'https://www.warcraftlogs.com',
   retail: 'https://www.warcraftlogs.com',
 };
+
+/**
+ * Instances whose game the host's own worldData.expansions does not list (aliases onto
+ * another game's host): their zones and encounters are reached through the expansion ID.
+ */
+export const INSTANCE_EXPANSION_ID: Partial<Record<Instance, number>> = { forever: 3001 };
 
 export const ALL_INSTANCES = Object.keys(INSTANCE_HOSTS) as readonly Instance[];
 
@@ -21,13 +30,24 @@ export function isInstance(s: unknown): s is Instance {
   return typeof s === 'string' && (ALL_INSTANCES as readonly string[]).includes(s);
 }
 
-export interface RequestArgs {
+export interface RequestArgs<T = unknown> {
   instance: Instance;
   query: string;
   variables: Record<string, unknown>;
   useCache: boolean;
   cacheTtlSeconds?: number;
   force: boolean;
+  /** Return false to keep a response out of the cache — e.g. one whose JSON scalar carries an error. */
+  cacheable?: (data: T) => boolean;
+}
+
+/**
+ * WCL's JSON-scalar fields (characterRankings, zoneRankings, …) report a failure in-band as
+ * { error: string } with HTTP 200 and no GraphQL error. Returns that message, if any.
+ */
+export function jsonScalarError(value: unknown): string | undefined {
+  const error = (value as { error?: unknown } | null | undefined)?.error;
+  return typeof error === 'string' ? error : undefined;
 }
 
 export interface RequestResult<T = unknown> {
@@ -100,7 +120,7 @@ async function doFetch(url: string, token: string, query: string, variables: Rec
   });
 }
 
-export async function gqlRequest<T = unknown>(args: RequestArgs): Promise<RequestResult<T>> {
+export async function gqlRequest<T = unknown>(args: RequestArgs<T>): Promise<RequestResult<T>> {
   const { instance, query, variables, useCache, cacheTtlSeconds, force } = args;
   const url = INSTANCE_HOSTS[instance] + '/api/v2/user';
   const key = cacheKey(instance, query, variables);
@@ -168,7 +188,7 @@ export async function gqlRequest<T = unknown>(args: RequestArgs): Promise<Reques
   const result: RequestResult<T> = { data: visible as T, rateLimit, ...(payload.errors ? { errors: payload.errors } : {}) };
 
   // A response with partial errors may be transiently degraded — never freeze it in the cache.
-  const clean = !payload.errors || payload.errors.length === 0;
+  const clean = (!payload.errors || payload.errors.length === 0) && (args.cacheable?.(result.data) ?? true);
   if (useCache && clean && cacheTtlSeconds && cacheTtlSeconds > 0) {
     cacheSet(key, result, cacheTtlSeconds);
   }

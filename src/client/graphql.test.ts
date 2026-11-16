@@ -16,6 +16,13 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); });
 
 describe('gqlRequest', () => {
+  it('routes the forever instance to a host that has an API (forever.warcraftlogs.com has none)', async () => {
+    writeCredentials({ access_token: 'tok', refresh_token: 'r', expires_at: Date.now() + 3_600_000, token_type: 'Bearer' });
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ data: { x: 1 } }), { status: 200 }));
+    await gqlRequest({ instance: 'forever', query: 'query { x }', variables: {}, force: true, useCache: false });
+    expect(fetchMock.mock.calls[0]![0]).toBe('https://www.warcraftlogs.com/api/v2/user');
+  });
+
   it('sends a POST with Authorization Bearer to the correct instance', async () => {
     writeCredentials({ access_token: 'tok', refresh_token: 'r', expires_at: Date.now() + 3_600_000, token_type: 'Bearer' });
 

@@ -2,14 +2,15 @@ import { join } from 'node:path';
 import { readConfig } from '../config.js';
 import type { Instance } from '../client/graphql.js';
 
-export type Expansion = 'tbc' | 'mop' | 'classic' | 'sod';
-export const ALL_EXPANSIONS: readonly Expansion[] = ['tbc', 'mop', 'classic', 'sod'];
+export type Expansion = 'tbc' | 'mop' | 'classic' | 'sod' | 'forever';
+export const ALL_EXPANSIONS: readonly Expansion[] = ['tbc', 'mop', 'classic', 'sod', 'forever'];
 
 const DIR_NAMES: Record<Expansion, string> = {
   tbc: 'tbc-new',
   mop: 'mop',
   classic: 'classic',
   sod: 'sod',
+  forever: 'forever',
 };
 
 const INSTANCE_FOR: Record<Expansion, Instance> = {
@@ -17,6 +18,7 @@ const INSTANCE_FOR: Record<Expansion, Instance> = {
   mop: 'classic',
   classic: 'vanilla',
   sod: 'sod',
+  forever: 'forever',
 };
 
 export function isExpansion(s: unknown): s is Expansion {

@@ -4,6 +4,7 @@
     "tbc": "/absolute/path/to/wowsims/tbc-new",
     "mop": "/absolute/path/to/wowsims/mop",
     "classic": "/absolute/path/to/wowsims/classic",
-    "sod": "/absolute/path/to/wowsims/sod"
+    "sod": "/absolute/path/to/wowsims/sod",
+    "forever": "/absolute/path/to/wowsims/forever"
   }
 }

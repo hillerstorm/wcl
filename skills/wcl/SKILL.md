@@ -38,15 +38,15 @@ CLI data (`config.json`, `credentials.json`, `.cache/`) lives at the repo root (
 | `wcl cast-snapshot <code> <fightId> <name> --ability <id> --index <N>` | Nth cast of an ability |
 | `wcl gear <code> <fightId> <name>` | Gear/enchants/gems/temp-enchants for a player (boss fights only) |
 | `wcl search --encounter <name-or-id> [--class --spec --difficulty --region --server --guild --order --limit --page]` | Public-log discovery |
-| `wcl character <name> <server-slug> <region> [--zone <id> --metric <m> --spec <s> --difficulty <n> --size <n> --partition <n> --json]` | Character zone rankings: per-boss best%, kills, server/region rank |
+| `wcl character <name> <server-slug> <region> [--zone <id> --metric <m> --spec <s> --difficulty <n> --size <n> --partition <n> --json]` | Character zone rankings: per-boss best%, kills, server/region rank. `--id <characterId>` or `<name> --report <code>` replace server/region (required for Forever) |
 | `wcl cache stats` / `wcl cache clear [--prefix p]` | Cache management |
 
 ## Global flags
 
 | Flag | Purpose |
 |---|---|
-| `--instance fresh\|classic\|vanilla\|sod\|retail` | API host. Default: derived from `--expansion`, else `fresh`. |
-| `--expansion tbc\|mop\|classic\|sod` | Enrich response with sim db.json |
+| `--instance fresh\|classic\|vanilla\|sod\|forever\|retail` | API host. Default: derived from `--expansion`, else `fresh`. |
+| `--expansion tbc\|mop\|classic\|sod\|forever` | Enrich response with sim db.json |
 | `--no-cache` | Bypass disk cache |
 | `--force` | Ignore rate-limit threshold |
 | `--pretty` | Human-readable JSON output |
@@ -59,11 +59,24 @@ CLI data (`config.json`, `credentials.json`, `.cache/`) lives at the repo root (
 | `mop` | `classic` → `classic.warcraftlogs.com` | Mists of Pandaria / Classic Progression |
 | `classic` | `vanilla` → `vanilla.warcraftlogs.com` | Vanilla / Classic Era |
 | `sod` | `sod` → `sod.warcraftlogs.com` | Season of Discovery |
+| `forever` | `forever` → `www.warcraftlogs.com` (alias, see [Forever](#forever-wow-forever)) | WoW Forever |
 | (none) | `retail` → `www.warcraftlogs.com` | Retail (no sim enrichment) |
 
 Passing `--expansion <x>` is usually sufficient — the instance is auto-derived. Override with `--instance` only when you want to mix (e.g., query a fresh log without sim enrichment).
 
-Each expansion's sim-repo path is read from `config.json` (`simPaths.<expansion>`) — set via `wcl init`. Expansions without a configured path skip enrichment.
+Each expansion's sim-repo path is read from `config.json` (`simPaths.<expansion>`) — set via `wcl init`. Expansions without a configured path skip enrichment. Items are looked up in the sim's `db.json`, then in `leftover_db.json` (the items the sim UI filters out: quest greens, random-suffix gear).
+
+### Forever (WoW Forever)
+
+`forever.warcraftlogs.com` has **no API** (`/api/v2/*` is 404) and its site sits behind a bot wall, so `--instance forever` is an alias for the main API host. WCL shares one backend: a Forever report code (from a `forever.warcraftlogs.com/reports/<code>` URL) works there, and so do Forever's zones and characters. Use `--expansion forever` (implies the instance, adds sim enrichment).
+
+- **Report commands all work**: `report`, `fights`, `actors`, `fight`, `events`, `player`, `cast-snapshot`, `gear`.
+- **A dungeon is one encounter**: the whole run is a single encounter fight (e.g. `The Drowned City`, difficulty `10`, size `5`), and pulls outside it show as trash. `gear` and the `player`/`cast-snapshot` gear and talents therefore need the run fight's ID.
+- **Talents** arrive as `combatantInfo.talentTree` nodes (`{ id, rank, nodeID }`) — read `caster.combatantInfo.talentTree` from `cast-snapshot` or `player.detail.combatantInfo.talentTree` from `player`; `talents` is empty.
+- **No x/y positions** in events, and the totem raid aura is not in `buffs`.
+- **`search`**: zones are `3000` Dungeons (difficulty `10`) and `3001` Onyxia (difficulty `3`, size 40); `--difficulty` takes a numeric ID. Encounter names resolve against the Forever expansion (`3001`). The API rejects rankings for **dungeon runs** (`Invalid raid zone specified.`, exit 1); Onyxia is accepted but had no data yet on 2026-11-16 (`Fight data doesn't exist yet`, exit 1; error answers are never cached). `--region`/`--server` are untested on Forever and may hit the same slug collision as `character`.
+- **`character`**: name/server/region lookups cannot reach Forever characters (its regions reuse the `US`/`EU`/… slugs of the host's own). Use `wcl character <name> --report <code> --instance forever` (resolves the ID through a report the character is ranked in) or `--id <characterId>`.
+- **Finding report codes** is manual: there is no report search without rankings, so take the code from the site URL.
 
 ## Damage-verification workflow
 
@@ -86,7 +99,7 @@ Each expansion's sim-repo path is read from `config.json` (`simPaths.<expansion>
 
 ## Gear (`wcl gear`)
 
-Fetches the gear snapshot WCL audits at the start of each boss fight, via `playerDetails(includeCombatantInfo: true)`. Boss fights only (`encounterID != 0`) — on trash pulls WCL returns no combatant info (exit 7, `BAD_INPUT`). Returns 19-slot `gearIds[]` (0 = empty slot) plus per-item `itemId`, `slotName`, `itemLevel`, `quality`, `enchantId`/`enchantName`, `temporaryEnchantId`/`temporaryEnchantName` (Windfury, poisons, sharpening stones), `gemIds[]`, `setId`. With `--expansion`, every item is joined against the sim's `db.json` and the result includes `simItem.scalingOptions.stats` ready for sim consumption.
+Fetches the gear snapshot WCL audits at the start of each boss fight, via `playerDetails(includeCombatantInfo: true)` (`player` and `cast-snapshot` read the same snapshot). Boss fights only (`encounterID != 0`) — on trash pulls WCL returns no combatant info (exit 7, `BAD_INPUT`). Returns 19-slot `gearIds[]` (0 = empty slot) plus per-item `itemId`, `slotName`, `itemLevel`, `quality`, `enchantId`/`enchantName`, `temporaryEnchantId`/`temporaryEnchantName` (Windfury, poisons, sharpening stones), `gemIds[]`, `setId`. With `--expansion`, every item is joined against the sim's `db.json` (falling back to `leftover_db.json`) and the result includes `simItem.scalingOptions.stats` ready for sim consumption.
 
 ## JSON output shapes
 

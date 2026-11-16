@@ -10,8 +10,8 @@ program
   .name('wcl')
   .description('Warcraft Logs CLI — fetch, search, and verify against the WCL GraphQL API')
   .version(pkg.version)
-  .option('--instance <inst>', 'WCL instance: fresh (TBC) | classic (MoP) | vanilla (Era) | sod | retail')
-  .option('--expansion <exp>', 'sim project for enrichment: tbc | mop | classic | sod')
+  .option('--instance <inst>', 'WCL instance: fresh (TBC) | classic (MoP) | vanilla (Era) | sod | forever | retail')
+  .option('--expansion <exp>', 'sim project for enrichment: tbc | mop | classic | sod | forever')
   .option('--no-cache', 'bypass disk cache for this call')
   .option('--force', 'ignore rate-limit threshold')
   .option('--pretty', 'human-readable JSON output');
@@ -269,7 +269,7 @@ program.command('search')
   .option('--encounter <name-or-id>', 'encounter name or numeric ID')
   .option('--class <name>', 'class filter')
   .option('--spec <name>', 'spec filter')
-  .option('--difficulty <d>', 'n | h | m | normal | heroic | mythic')
+  .option('--difficulty <d>', 'n | h | m | normal | heroic | mythic, or a numeric difficulty ID')
   .option('--region <region>', 'NA | EU | KR | TW | CN')
   .option('--server <slug>', 'server slug')
   .option('--guild <name>', 'guild name')
@@ -294,6 +294,8 @@ program.command('search')
   }));
 
 interface CharacterCmdOpts {
+  id?: number;
+  report?: string;
   zone?: number;
   metric?: string;
   spec?: string;
@@ -305,9 +307,11 @@ interface CharacterCmdOpts {
 
 program.command('character')
   .description('Character zone rankings: per-boss best%, kills, server/region rank (text table; --json for structured)')
-  .argument('<name>', 'character name')
-  .argument('<server>', 'server slug (lowercase, no spaces)')
-  .argument('<region>', 'region: us | eu | kr | tw | cn')
+  .argument('[name]', 'character name')
+  .argument('[server]', 'server slug (lowercase, no spaces)')
+  .argument('[region]', 'region: us | eu | kr | tw | cn')
+  .option('--id <characterId>', 'look up by WCL character ID instead of name/server/region', intArg('--id'))
+  .option('--report <code>', 'resolve <name> through this report\'s ranked characters (the way to reach Forever characters)')
   .option('--zone <id>', 'zone ID (default: character\'s latest zone)', intArg('--zone'))
   .option('--metric <m>', 'dps | hps | bossdps | tankhps | playerscore | …')
   .option('--spec <name>', 'restrict rankings to a spec')
@@ -315,11 +319,16 @@ program.command('character')
   .option('--size <n>', 'raid size', intArg('--size'))
   .option('--partition <n>', 'ranking partition', intArg('--partition'))
   .option('--json', 'emit JSON instead of a text table')
-  .action(wrapAction(async (name: string, server: string, region: string, cmdOpts: CharacterCmdOpts) => {
+  .action(wrapAction(async (name: string | undefined, server: string | undefined, region: string | undefined, cmdOpts: CharacterCmdOpts) => {
     const g = globals();
     const { runCharacter } = await import('./commands/character.js');
     await runCharacter({
-      name, server, region, json: !!cmdOpts.json,
+      json: !!cmdOpts.json,
+      ...(name !== undefined ? { name } : {}),
+      ...(server !== undefined ? { server } : {}),
+      ...(region !== undefined ? { region } : {}),
+      ...(cmdOpts.id !== undefined ? { id: cmdOpts.id } : {}),
+      ...(cmdOpts.report !== undefined ? { report: cmdOpts.report } : {}),
       ...(cmdOpts.zone !== undefined ? { zone: cmdOpts.zone } : {}),
       ...(cmdOpts.metric !== undefined ? { metric: cmdOpts.metric } : {}),
       ...(cmdOpts.spec !== undefined ? { spec: cmdOpts.spec } : {}),

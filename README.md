@@ -76,10 +76,12 @@ Output is JSON (add `--pretty` for human-readable), except `fights`, `actors` an
 | `wcl cast-snapshot <code> <fightId> <name>` | Full state snapshot around a single cast |
 | `wcl gear <code> <fightId> <name>` | Gear/enchants/gems/temp-enchants for a player (boss fights only) |
 | `wcl search` | Public-log discovery via rankings |
-| `wcl character <name> <server> <region>` | Character zone rankings |
+| `wcl character <name> <server> <region>` | Character zone rankings (`--id`, or `<name> --report <code>`, instead of server/region) |
 | `wcl cache stats` / `wcl cache clear` | Cache management |
 
-Run any command with `--help` for full flags. Global flags: `--instance` / `--expansion` select the WCL host (retail, fresh, classic, vanilla, sod) and sim enrichment; `--no-cache`, `--force`, `--pretty`.
+Run any command with `--help` for full flags. Global flags: `--instance` / `--expansion` select the WCL host (retail, fresh, classic, vanilla, sod, forever) and sim enrichment; `--no-cache`, `--force`, `--pretty`.
+
+**WoW Forever:** `forever.warcraftlogs.com` has no API, so `--instance forever` (implied by `--expansion forever`) goes through the main API host, where Forever report codes, zones and characters are all reachable. Every report command works; the API serves no rankings for Forever dungeon runs, and Forever characters are looked up with `wcl character <name> --report <code>` or `--id` rather than by server/region.
 
 ## Data locations
 
